@@ -24,15 +24,23 @@ def parse_static_info(plugin_name: str, target_dir: str) -> (str, str, str, dict
         r"\"\s*EXECUTABLE\s*([^\s]+)\s*\)"
     )
 
+    package_name = node_name = ''
     for root, _, files in os.walk(target_dir):
         for file in files:
             if file.endswith('.launch.py'):
                 with open(os.path.join(root, file), 'r') as f:
                     match = COMPOSABLE_NODE_PATTERN.search(f.read())
                     if match:
+                        if package_name and node_name:
+                            print(f"Found multiple ComposableNodes with {plugin_name}")
+                            selected_package = ask_user_to_select([package_name, match.group(1)])
+                            if selected_package == package_name:
+                                continue
+
                         package_name, node_name, remappings = match.groups()
                         remappings = {m.group(1): m.group(2) for m in REMAPPING_PATTERN.finditer(
                             remappings)} if remappings is not None else []
+
             elif file == "CMakeLists.txt":
                 with open(os.path.join(root, file), 'r') as f:
                     match = COMPONENTS_REGISTER_PATTERN.search(f.read())
