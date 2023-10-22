@@ -57,7 +57,7 @@ def parse_dynamic_info(node_name: str) -> (str, list[str]):
         print(f'Multiple nodes found with "{node_name}":')
         ros2_node_name = ask_user_to_select(output_lines)
 
-    namespace = ros2_node_name.replace(node_name, '')
+    namespace = ros2_node_name.replace(node_name, '')[:-1]
     process = subprocess.Popen(
         f"ros2 node info {ros2_node_name}", stdout=subprocess.PIPE, shell=True)
     output, _ = process.communicate()
