@@ -1,11 +1,11 @@
 use std::fs::{self, File};
 use std::io::Write;
-use crate::utils::{run_command, create_progress_bar, NodeNameConverter};
+use auto_isolated_measurement::utils::{run_command, create_progress_bar, NodeNameConverter};
 
 const OUTPUT_DIR: &str = "dynamic_node_info";
 const SKIP_NODES: [&str; 5] = ["caret_", "launch_ros_", "rviz2", "rosbag2_player", "transform_listener_impl_"];
 
-pub fn save_dynamic_node_info() {
+pub fn main() {
     let node_list_str = run_command("ros2 node list");
     let node_list = node_list_str.trim().split('\n');
     let pb = create_progress_bar(node_list.clone().count() as i32);
