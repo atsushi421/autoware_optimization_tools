@@ -1,20 +1,47 @@
-use std::process::Command;
 use indicatif::{ProgressBar, ProgressStyle};
+use serde_yaml::Mapping;
+use std::{collections::HashMap, process::Command};
 
 pub struct NodeNameConverter {}
 
 impl NodeNameConverter {
+    /// # Examples
+    /// ```
+    /// use auto_isolated_measurement::utils::NodeNameConverter;
+    ///
+    /// let file_name = NodeNameConverter::to_file_name("/a/b/c/d_e_f");
+    /// assert_eq!(file_name, "a-b-c-d_e_f");
+    /// ```
     pub fn to_file_name(node_name: &str) -> String {
         node_name.trim_start_matches('/').replace('/', "-")
     }
 
+    /// # Examples
+    /// ```
+    /// use auto_isolated_measurement::utils::NodeNameConverter;
+    ///
+    /// let ros_node_name = NodeNameConverter::to_ros_node_name("a-b-c-d_e_f");
+    /// assert_eq!(ros_node_name, "/a/b/c/d_e_f");
+    /// ```
     pub fn to_ros_node_name(file_name: &str) -> String {
         format!("/{}", file_name.replace('-', "/"))
     }
 
-    // pub fn to_namespace_and_node_name(ros_node_name: &str) -> (String, String) {
-    //     unimplemented!()
-    // }
+    /// # Examples
+    /// ```
+    /// use auto_isolated_measurement::utils::NodeNameConverter;
+    ///
+    /// let (namespace, node_name) = NodeNameConverter::to_namespace_and_node_name("/a/b/c/d_e_f");
+    /// assert_eq!(namespace, "/a/b/c");
+    /// assert_eq!(node_name, "d_e_f");
+    /// ```
+    pub fn to_namespace_and_node_name(ros_node_name: &str) -> (String, String) {
+        let components: Vec<&str> = ros_node_name.split('/').collect();
+        (
+            components[..components.len() - 1].join("/"),
+            components.last().unwrap().to_string(),
+        )
+    }
 }
 
 pub fn run_command(command: &str) -> String {
@@ -35,4 +62,28 @@ pub fn create_progress_bar(len: i32) -> ProgressBar {
             .progress_chars("##-"),
     );
     pb
+}
+
+pub fn read_yaml_as_mapping(path: &str) -> Mapping {
+    let file = std::fs::File::open(path).expect("failed to open file");
+    let yaml: serde_yaml::Value = serde_yaml::from_reader(file).expect("failed to read yaml");
+    yaml.as_mapping().unwrap().clone()
+}
+
+pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<String> {
+    mapping
+        .get(&serde_yaml::Value::from(key))
+        .unwrap()
+        .as_mapping()
+        .unwrap()
+        .iter()
+        .filter_map(|(k, _)| {
+            let k_str = k.as_str().unwrap().to_string();
+            if k == "/clock" || k == "/parameter_events" || k == "/rosout" {
+                None
+            } else {
+                Some(k_str)
+            }
+        })
+        .collect()
 }

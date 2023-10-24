@@ -7,3 +7,6 @@ edition = "2021"
 
 [dependencies]
 indicatif = "0.17.7"
+regex = "1.10.2"
+walkdir = "2.4.0"
+serde_yaml = "0.9.25"
