@@ -161,3 +161,4 @@ cython_debug/
 
 output/
 .vscode/
+dynamic_node_info/
