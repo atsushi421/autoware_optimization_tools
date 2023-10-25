@@ -5,6 +5,7 @@ use std::io::Write;
 use std::{collections::HashMap, fs::File};
 use walkdir::WalkDir;
 
+use crate::plugin_parser::parse_plugin;
 use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
 
 struct ComposableNodeInfo {
@@ -44,7 +45,7 @@ impl RegexFinder {
                 &[
                     r#"ComposableNode\("#,
                     r#"\s*package=['"]([^'"]+)['"],"#,
-                    r#"\s*plugin=['"]([^'"]+)['"],"#,
+                    r#"\s*plugin=([^,]+?),"#,
                     r#"\s*name=['"]"#,
                     node_name,
                     r#"['"],"#,
@@ -85,6 +86,7 @@ impl RegexFinder {
     }
 
     fn set_component_register_pattern(&mut self, plugin_name: &str) {
+        let _i = 1;
         self.component_register_pattern = Some(
             Regex::new(
                 &[
@@ -257,7 +259,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
             complete_node_info.set_package_plugin_remappings(
                 &first_composable_node.package,
-                &first_composable_node.plugin,
+                &parse_plugin(&first_composable_node.plugin, target_dir, &node_name),
                 map_remappings(
                     first_composable_node.remappings.clone(),
                     subs.clone(),
