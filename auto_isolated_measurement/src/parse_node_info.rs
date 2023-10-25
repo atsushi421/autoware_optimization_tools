@@ -1,7 +1,7 @@
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::parse_map_projection_loader;
+use crate::edge_cases::{parse_map_projection_loader, parse_topic_state_monitor};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::map_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
@@ -30,6 +30,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     // Edge case
     if node_name == "map_projection_loader" {
         let (package_name, executable) = parse_map_projection_loader(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_executable(&executable);
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
+    } else if node_name.contains("topic_state_monitor") {
+        let (package_name, executable) = parse_topic_state_monitor(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_executable(&executable);
 

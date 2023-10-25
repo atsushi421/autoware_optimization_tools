@@ -15,3 +15,15 @@ pub fn parse_map_projection_loader(target_dir: &str) -> (String, String) {
         caps.get(2).unwrap().as_str().to_string(),
     )
 }
+
+pub fn parse_topic_state_monitor(target_dir: &str) -> (String, String) {
+    let launch_file =
+        read_to_string(search_file(target_dir, "topic_state_monitor.launch.xml")).unwrap();
+    let re = Regex::new(r#"pkg="([^"]+)" +exec="([^"]+)"#).unwrap();
+
+    let caps = re.captures(&launch_file).unwrap();
+    (
+        caps.get(1).unwrap().as_str().to_string(),
+        caps.get(2).unwrap().as_str().to_string(),
+    )
+}
