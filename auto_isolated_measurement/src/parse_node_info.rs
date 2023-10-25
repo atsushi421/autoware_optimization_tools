@@ -5,7 +5,7 @@ use walkdir::WalkDir;
 
 use crate::edge_cases::parse_map_projection_loader;
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
-use crate::plugin_parser::parse_plugin;
+use crate::parse_plugin::parse_plugin;
 use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
 
 struct ComposableNodeInfo {

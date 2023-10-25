@@ -21,13 +21,8 @@ struct ArgParser {
 fn main() {
     let arg: ArgParser = ArgParser::parse();
 
-    // for entry in read_dir(arg.dymanic_node_info_dir).unwrap() {
-    //     let path = entry.unwrap().path();
-    //     parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
-    // }
-
-    parse_node_info(
-        "/home/atsushi/autoware_optimization_tools/auto_isolated_measurement/dynamic_node_info/map-map_projection_loader.yaml",
-        &arg.parsed_dir
-    )
+    for entry in read_dir(arg.dymanic_node_info_dir).unwrap() {
+        let path = entry.unwrap().path();
+        parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
+    }
 }
