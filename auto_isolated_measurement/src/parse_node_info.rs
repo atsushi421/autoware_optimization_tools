@@ -1,10 +1,11 @@
 use regex::{Regex, RegexBuilder};
-use std::collections::HashMap;
 use std::fs;
 use walkdir::WalkDir;
 
 use crate::edge_cases::parse_map_projection_loader;
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
+use crate::map_remmappings::map_remappings;
+use crate::parse_executable::ExecutableParser;
 use crate::parse_plugin::parse_plugin;
 use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
 
@@ -32,16 +33,16 @@ impl PartialEq for ComposableNodeInfo {
     }
 }
 
-struct RegexFinder {
-    composable_node_pattern: Regex,
-    remapping_pattern: Regex,
-    component_register_pattern: Option<Regex>,
+struct LaunchParser {
+    launch_py_pattern: Regex,
+    launch_py_remapping_pattern: Regex,
+    launch_xml_pattern: Regex,
 }
 
-impl RegexFinder {
+impl LaunchParser {
     fn new(node_name: &str) -> Self {
         Self {
-            composable_node_pattern: RegexBuilder::new(
+            launch_py_pattern: RegexBuilder::new(
                 &[
                     r#"ComposableNode\("#,
                     r#"\s*package=['"]([^'"]+)['"],"#,
@@ -56,14 +57,28 @@ impl RegexFinder {
             .dot_matches_new_line(true)
             .build()
             .unwrap(),
-            remapping_pattern: Regex::new(r#"\(([^,]*), ([^)]*)\)"#).unwrap(),
-            component_register_pattern: None,
+            launch_py_remapping_pattern: Regex::new(r#"\(([^,]*), ([^)]*)\)"#).unwrap(),
+            launch_xml_pattern: RegexBuilder::new(
+                &[
+                    r#"ComposableNode\("#,
+                    r#"\s*package=['"]([^'"]+)['"],"#,
+                    r#"\s*plugin=([^,]+?),"#,
+                    r#"\s*name=['"]"#,
+                    node_name,
+                    r#"['"],"#,
+                    r#"\s*remappings=\[(.*?)\],"#,
+                ]
+                .join(""),
+            )
+            .dot_matches_new_line(true)
+            .build()
+            .unwrap(),
         }
     }
 
     fn parse_remappings(&self, remappings: &str) -> Vec<(String, String)> {
         let mut remappings_map = Vec::new();
-        for cap in self.remapping_pattern.captures_iter(remappings) {
+        for cap in self.launch_py_remapping_pattern.captures_iter(remappings) {
             remappings_map.push((
                 cap.get(1).unwrap().as_str().to_string(),
                 cap.get(2).unwrap().as_str().to_string(),
@@ -74,7 +89,7 @@ impl RegexFinder {
 
     fn find_composable_nodes(&self, launch_file: &str) -> Vec<ComposableNodeInfo> {
         let mut composable_nodes = Vec::new();
-        for cap in self.composable_node_pattern.captures_iter(launch_file) {
+        for cap in self.launch_py_pattern.captures_iter(launch_file) {
             composable_nodes.push(ComposableNodeInfo::new(
                 cap.get(1).unwrap().as_str(),
                 cap.get(2).unwrap().as_str(),
@@ -83,71 +98,6 @@ impl RegexFinder {
         }
 
         composable_nodes
-    }
-
-    fn set_component_register_pattern(&mut self, plugin_name: &str) {
-        let _i = 1;
-        self.component_register_pattern = Some(
-            Regex::new(
-                &[
-                    r#"rclcpp_components_register_node\("#,
-                    r#"\s*[^\s]+\s*"#,
-                    r#"PLUGIN\s*""#,
-                    plugin_name,
-                    r#"""#,
-                    r#"\s*EXECUTABLE\s*([^\s]+)\s*\)"#,
-                ]
-                .join(""),
-            )
-            .unwrap(),
-        );
-    }
-
-    fn find_executable(&self, cmake_file: &str) -> Option<String> {
-        self.component_register_pattern
-            .as_ref()
-            .unwrap()
-            .captures(cmake_file)
-            .map(|cap| cap.get(1).unwrap().as_str().to_string())
-    }
-}
-
-fn map_remappings(
-    mut original_remappings: Vec<(String, String)>,
-    mut subs: Vec<String>,
-    mut pubs: Vec<String>,
-) -> Option<HashMap<String, String>> {
-    let mut fixed_remappings = HashMap::new();
-
-    // First, the topics for which the remapping string is directly specified are mapped.
-    original_remappings.retain(|(from, to)| {
-        if to.starts_with('\"') {
-            fixed_remappings.insert(from.replace('\"', ""), to.replace('\"', ""));
-            subs.retain(|sub_| sub_ != to);
-            pubs.retain(|pub_| pub_ != to);
-            false
-        } else {
-            true
-        }
-    });
-
-    // If there is one input and one output, they correspond to sub and pub respectively.
-    if original_remappings.len() <= 2 && subs.len() <= 1 && pubs.len() <= 1 {
-        for (from, _) in original_remappings {
-            if from.contains("input") {
-                fixed_remappings.insert(from.replace('\"', ""), subs[0].clone());
-            } else if from.contains("output") {
-                fixed_remappings.insert(from.replace('\"', ""), pubs[0].clone());
-            }
-        }
-    }
-
-    // TODO: support more cases
-
-    if fixed_remappings.is_empty() {
-        None
-    } else {
-        Some(fixed_remappings)
     }
 }
 
@@ -165,7 +115,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let subs = get_remapped_topics_from_mapping(&dynamic_node_info, "Subscribers");
     let pubs = get_remapped_topics_from_mapping(&dynamic_node_info, "Publishers");
 
-    let mut complete_node_info = CompleteNodeInfo::new(&node_name);
+    let mut complete_node_info = CompleteNodeInfo::new(&namespace, &node_name);
 
     // Edge case
     if node_name == "map_projection_loader" {
@@ -177,7 +127,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         return;
     }
 
-    let mut regex_finder = RegexFinder::new(&node_name);
+    let launch_parser = LaunchParser::new(&node_name);
 
     // Parse launch files to get package name, plugin name, and remappings
     for entry in WalkDir::new(target_dir).into_iter().flatten() {
@@ -187,7 +137,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         let file_path = entry.path().to_str().unwrap();
         if file_path.ends_with(".launch.py") {
             let launch_file = fs::read_to_string(file_path).unwrap();
-            let composable_nodes = regex_finder.find_composable_nodes(&launch_file);
+            let composable_nodes = launch_parser.find_composable_nodes(&launch_file);
             if composable_nodes.is_empty() {
                 continue;
             }
@@ -234,7 +184,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     }
 
     // Parse CMakeLists.txt to get executable name
-    regex_finder.set_component_register_pattern(complete_node_info.get_plugin_name());
+    let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
     for entry in WalkDir::new(target_dir).into_iter().flatten() {
         if entry.file_type().is_dir() {
             continue;
@@ -242,7 +192,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         let file_path = entry.path().to_str().unwrap();
         if file_path.ends_with("CMakeLists.txt") {
             let cmake_file = fs::read_to_string(file_path).unwrap();
-            if let Some(executable) = regex_finder.find_executable(&cmake_file) {
+            if let Some(executable) = executable_parser.find_executable(&cmake_file) {
                 complete_node_info.set_executable(&executable);
                 break;
             }

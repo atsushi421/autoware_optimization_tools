@@ -12,6 +12,7 @@ const OUTPUT_DIR: &str = "complete_node_info";
 
 #[derive(Serialize)]
 pub struct CompleteNodeInfo {
+    namespace: String,
     node_name: String,
     package_name: Option<String>,
     plugin_name: Option<String>,
@@ -20,8 +21,9 @@ pub struct CompleteNodeInfo {
 }
 
 impl CompleteNodeInfo {
-    pub fn new(node_name: &str) -> Self {
+    pub fn new(namespace: &str, node_name: &str) -> Self {
         Self {
+            namespace: namespace.to_string(),
             node_name: node_name.to_string(),
             package_name: None,
             plugin_name: None,

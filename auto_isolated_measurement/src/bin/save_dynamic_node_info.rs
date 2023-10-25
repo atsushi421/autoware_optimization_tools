@@ -10,7 +10,7 @@ const SKIP_NODES: [&str; 7] = [
     "rosbag2_player",
     "transform_listener_impl_",
     "container",
-    "/system/component_state_monitor/component",
+    "/system/component_state_monitor/component", // not executable
 ];
 
 pub fn main() {
