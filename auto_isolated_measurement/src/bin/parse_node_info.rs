@@ -1,11 +1,15 @@
+use dirs::{self, home_dir};
 use regex::{Regex, RegexBuilder};
-use std::collections::HashMap;
+use serde::Serialize;
 use std::fs;
+use std::io::Write;
+use std::{collections::HashMap, fs::File};
 use walkdir::WalkDir;
 
 use auto_isolated_measurement::utils::{
     get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter,
 };
+use clap::Parser;
 
 struct ComposableNodeInfo {
     package: String,
@@ -149,10 +153,65 @@ fn map_remappings(
     }
 }
 
-fn parse_node_info(
-    dynamic_node_info_path: &str,
-    target_dir: &str,
-) -> (String, String, HashMap<String, String>, String) {
+const OUTPUT_DIR: &str = "complete_node_info";
+
+#[derive(Serialize)]
+struct CompleteNodeInfo {
+    node_name: String,
+    package_name: Option<String>,
+    plugin_name: Option<String>,
+    remappings: Option<HashMap<String, String>>,
+    executable: Option<String>,
+}
+
+impl CompleteNodeInfo {
+    fn new(node_name: &str) -> Self {
+        Self {
+            node_name: node_name.to_string(),
+            package_name: None,
+            plugin_name: None,
+            remappings: None,
+            executable: None,
+        }
+    }
+
+    fn set_package_plugin_remappings(
+        &mut self,
+        package_name: &str,
+        plugin_name: &str,
+        remappings: HashMap<String, String>,
+    ) {
+        if self.package_name.is_some() || self.plugin_name.is_some() || self.remappings.is_some() {
+            unreachable!("package_name, plugin_name, and remappings are already set.");
+        }
+
+        self.package_name = Some(package_name.to_string());
+        self.plugin_name = Some(plugin_name.to_string());
+        self.remappings = Some(remappings);
+    }
+
+    fn exists_package_plugin_remappings(&self) -> bool {
+        self.package_name.is_some() && self.plugin_name.is_some() && self.remappings.is_some()
+    }
+
+    fn get_plugin_name(&self) -> &str {
+        self.plugin_name.as_ref().unwrap()
+    }
+
+    fn set_executable(&mut self, executable: &str) {
+        if self.executable.is_some() {
+            unreachable!("executable is already set.");
+        }
+
+        self.executable = Some(executable.to_string());
+    }
+
+    fn exists_executable(&self) -> bool {
+        self.executable.is_some()
+    }
+}
+
+fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let ros_node_name = NodeNameConverter::to_ros_node_name(
         dynamic_node_info_path
             .split('/')
@@ -166,13 +225,11 @@ fn parse_node_info(
     let subs = get_remapped_topics_from_mapping(&dynamic_node_info, "Subscribers");
     let pubs = get_remapped_topics_from_mapping(&dynamic_node_info, "Publishers");
 
+    let mut complete_node_info = CompleteNodeInfo::new(&node_name);
+
     let mut regex_finder = RegexFinder::new(&node_name);
 
     // Parse launch files to get package name, plugin name, and remappings
-    let mut package_name: Option<String> = None;
-    let mut plugin_name: Option<String> = None;
-    let mut remappings: Option<HashMap<String, String>> = None;
-    let mut found_flag = false;
     for entry in WalkDir::new(target_dir).into_iter().flatten() {
         if entry.file_type().is_dir() {
             continue;
@@ -193,10 +250,6 @@ fn parse_node_info(
                 continue;
             }
 
-            if found_flag {
-                unreachable!(); // HACK
-            }
-
             let first_composable_node = &composable_nodes[0];
             composable_nodes.iter().for_each(|composable_node| {
                 if first_composable_node != composable_node {
@@ -206,9 +259,9 @@ fn parse_node_info(
                 }
             });
 
-            package_name = Some(first_composable_node.package.clone());
-            plugin_name = Some(first_composable_node.plugin.clone());
-            remappings = Some(
+            complete_node_info.set_package_plugin_remappings(
+                &first_composable_node.package,
+                &first_composable_node.plugin,
                 map_remappings(
                     first_composable_node.remappings.clone(),
                     subs.clone(),
@@ -216,17 +269,15 @@ fn parse_node_info(
                 )
                 .unwrap(),
             );
-            found_flag = true;
         }
     }
 
-    if package_name.is_none() || plugin_name.is_none() || remappings.is_none() {
-        panic!("{} was not found.", node_name);
+    if !complete_node_info.exists_package_plugin_remappings() {
+        unreachable!("{} was not found.", node_name);
     }
 
     // Parse CMakeLists.txt to get executable name
-    regex_finder.set_component_register_pattern(plugin_name.as_ref().unwrap());
-    let mut executable: Option<String> = None;
+    regex_finder.set_component_register_pattern(complete_node_info.get_plugin_name());
     for entry in WalkDir::new(target_dir).into_iter().flatten() {
         if entry.file_type().is_dir() {
             continue;
@@ -234,37 +285,51 @@ fn parse_node_info(
         let file_path = entry.path().to_str().unwrap();
         if file_path.ends_with("CMakeLists.txt") {
             let cmake_file = fs::read_to_string(file_path).unwrap();
-            if let Some(executable_) = regex_finder.find_executable(&cmake_file) {
-                executable = Some(executable_);
+            if let Some(executable) = regex_finder.find_executable(&cmake_file) {
+                complete_node_info.set_executable(&executable);
                 break;
             }
         }
     }
 
-    if executable.is_none() {
-        panic!("{} was not found.", plugin_name.unwrap());
+    if !complete_node_info.exists_executable() {
+        panic!("{} was not found.", complete_node_info.get_plugin_name());
     }
 
-    (
-        package_name.unwrap(),
-        plugin_name.unwrap(),
-        remappings.unwrap(),
-        executable.unwrap(),
-    )
+    // Export
+    fs::create_dir_all(OUTPUT_DIR).unwrap();
+    let mut result = File::create(format!(
+        "{}/{}.yaml",
+        OUTPUT_DIR,
+        NodeNameConverter::to_file_name(&ros_node_name)
+    ))
+    .unwrap();
+    let yaml_string = serde_yaml::to_string(&complete_node_info).unwrap();
+    result
+        .write_all(yaml_string.as_bytes())
+        .expect("Failed to write to output file");
+}
+
+#[derive(Parser)]
+#[clap(name = "parse node info", version = "1.0", about = "")]
+struct ArgParser {
+    /// Path to DAGSet directory.
+    #[clap(
+        short = 'd',
+        long = "dymanic_node_info_dir",
+        default_value = "dynamic_node_info"
+    )]
+    dymanic_node_info_dir: String,
+    /// Number of processing cores.
+    #[clap(short = 'p', long = "parsed_dir", default_value_t = home_dir().unwrap().to_str().unwrap().to_string() + "/autoware/src")]
+    parsed_dir: String,
 }
 
 fn main() {
-    let (package_name, plugin_name, remappings, executable) = parse_node_info("/home/atsushi/autoware_optimization_tools/auto_isolated_measurement/dynamic_node_info/perception-object_recognition-detection-voxel_grid_downsample_filter.yaml",
-     "/home/atsushi/autoware/src"
-    );
+    let arg: ArgParser = ArgParser::parse();
 
-    print!(
-        "package: {}\nplugin: {}\nremappings: ",
-        package_name, plugin_name
-    );
-
-    // parse(
-    //     "/home/atsushi/autoware_optimization_tools/auto_isolated_measurement/dynamic_node_info/sensing-lidar-concatenate_data.yaml",
-    //     "/home/atsushi/autoware/src"
-    // )
+    for entry in fs::read_dir(arg.dymanic_node_info_dir).unwrap() {
+        let path = entry.unwrap().path();
+        parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
+    }
 }
