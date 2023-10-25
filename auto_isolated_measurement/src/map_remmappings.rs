@@ -36,13 +36,23 @@ pub fn map_remappings(
     if original_remappings.len() <= 2 && subs.len() <= 1 && pubs.len() <= 1 {
         original_remappings.retain(|(from, _)| {
             if from.contains("input") {
-                fixed_remappings.insert(from.replace('\"', ""), subs[0].clone());
+                fixed_remappings.insert(from.replace('\"', ""), subs.remove(0));
                 false
             } else if from.contains("output") {
-                fixed_remappings.insert(from.replace('\"', ""), pubs[0].clone());
+                fixed_remappings.insert(from.replace('\"', ""), pubs.remove(0));
+                false
+            } else if subs.len() + pubs.len() == 1 {
+                fixed_remappings.insert(
+                    from.replace('\"', ""),
+                    if subs.is_empty() {
+                        pubs.remove(0)
+                    } else {
+                        subs.remove(0)
+                    },
+                );
                 false
             } else {
-                unreachable!()
+                true
             }
         })
     }
@@ -57,7 +67,7 @@ pub fn map_remappings(
         } else if from.contains("output") {
             fixed_remappings.insert(
                 from.replace('\"', ""),
-                choise_closest_str(to, &mut pubs).unwrap(),
+                choise_closest_str(&to, &mut pubs).unwrap(),
             );
             false
         } else {

@@ -57,15 +57,7 @@ impl LaunchParser {
             .build()
             .unwrap(),
             launch_py_remapping_pattern: Regex::new(r#"\(([^,]*), ([^)]*)\)"#).unwrap(),
-            launch_xml_pattern: Regex::new(
-                &[
-                    r#"<node pkg="([^"]+)" exec="([^"]+)" name=""#,
-                    node_name,
-                    r#"""#,
-                ]
-                .join(""),
-            )
-            .unwrap(),
+            launch_xml_pattern: Regex::new(r#"<node pkg="([^"]+)" exec="([^"]+)" name=""#).unwrap(),
             launch_xml_remapping_pattern: Regex::new(r#"<remap from="([^"]+)" to="([^"]+)"/>"#)
                 .unwrap(),
         }
