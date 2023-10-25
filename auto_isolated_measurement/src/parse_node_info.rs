@@ -1,105 +1,15 @@
-use regex::{Regex, RegexBuilder};
-use std::fs;
+use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
 use crate::edge_cases::parse_map_projection_loader;
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::map_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
+use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
-use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
-
-struct ComposableNodeInfo {
-    package: String,
-    plugin: String,
-    remappings: Vec<(String, String)>,
-}
-
-impl ComposableNodeInfo {
-    fn new(package: &str, plugin: &str, remappings: Vec<(String, String)>) -> Self {
-        Self {
-            package: package.to_string(),
-            plugin: plugin.to_string(),
-            remappings,
-        }
-    }
-}
-
-impl PartialEq for ComposableNodeInfo {
-    fn eq(&self, other: &Self) -> bool {
-        self.package == other.package
-            && self.plugin == other.plugin
-            && self.remappings.len() == other.remappings.len()
-    }
-}
-
-struct LaunchParser {
-    launch_py_pattern: Regex,
-    launch_py_remapping_pattern: Regex,
-    launch_xml_pattern: Regex,
-}
-
-impl LaunchParser {
-    fn new(node_name: &str) -> Self {
-        Self {
-            launch_py_pattern: RegexBuilder::new(
-                &[
-                    r#"ComposableNode\("#,
-                    r#"\s*package=['"]([^'"]+)['"],"#,
-                    r#"\s*plugin=([^,]+?),"#,
-                    r#"\s*name=['"]"#,
-                    node_name,
-                    r#"['"],"#,
-                    r#"\s*remappings=\[(.*?)\],"#,
-                ]
-                .join(""),
-            )
-            .dot_matches_new_line(true)
-            .build()
-            .unwrap(),
-            launch_py_remapping_pattern: Regex::new(r#"\(([^,]*), ([^)]*)\)"#).unwrap(),
-            launch_xml_pattern: RegexBuilder::new(
-                &[
-                    r#"ComposableNode\("#,
-                    r#"\s*package=['"]([^'"]+)['"],"#,
-                    r#"\s*plugin=([^,]+?),"#,
-                    r#"\s*name=['"]"#,
-                    node_name,
-                    r#"['"],"#,
-                    r#"\s*remappings=\[(.*?)\],"#,
-                ]
-                .join(""),
-            )
-            .dot_matches_new_line(true)
-            .build()
-            .unwrap(),
-        }
-    }
-
-    fn parse_remappings(&self, remappings: &str) -> Vec<(String, String)> {
-        let mut remappings_map = Vec::new();
-        for cap in self.launch_py_remapping_pattern.captures_iter(remappings) {
-            remappings_map.push((
-                cap.get(1).unwrap().as_str().to_string(),
-                cap.get(2).unwrap().as_str().to_string(),
-            ));
-        }
-        remappings_map
-    }
-
-    fn find_composable_nodes(&self, launch_file: &str) -> Vec<ComposableNodeInfo> {
-        let mut composable_nodes = Vec::new();
-        for cap in self.launch_py_pattern.captures_iter(launch_file) {
-            composable_nodes.push(ComposableNodeInfo::new(
-                cap.get(1).unwrap().as_str(),
-                cap.get(2).unwrap().as_str(),
-                self.parse_remappings(cap.get(3).unwrap().as_str()),
-            ));
-        }
-
-        composable_nodes
-    }
-}
+use crate::utils::{
+    get_remapped_topics_from_mapping, read_yaml_as_mapping, search_file, NodeNameConverter,
+};
 
 pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let ros_node_name = NodeNameConverter::to_ros_node_name(
@@ -135,9 +45,10 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             continue;
         }
         let file_path = entry.path().to_str().unwrap();
+
         if file_path.ends_with(".launch.py") {
             let launch_file = fs::read_to_string(file_path).unwrap();
-            let composable_nodes = launch_parser.find_composable_nodes(&launch_file);
+            let composable_nodes = launch_parser.parse_launch_py(&launch_file);
             if composable_nodes.is_empty() {
                 continue;
             }
@@ -152,7 +63,11 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             });
 
             let package_name = &first_composable_node.package;
-            let plugin_name = &parse_plugin(&first_composable_node.plugin, target_dir, &node_name);
+            let plugin_name = &parse_plugin(
+                first_composable_node.plugin.as_ref().unwrap(),
+                target_dir,
+                &node_name,
+            );
 
             // TODO: 複数ファイルにマッチがある場合の対応
             if complete_node_info.exists_package_plugin()
@@ -164,7 +79,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
             complete_node_info.set_package_name(&first_composable_node.package);
             complete_node_info.set_plugin_name(&parse_plugin(
-                &first_composable_node.plugin,
+                first_composable_node.plugin.as_ref().unwrap(),
                 target_dir,
                 &node_name,
             ));
@@ -180,7 +95,26 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     }
 
     if !complete_node_info.exists_package_plugin() {
-        unreachable!("{} was not found.", ros_node_name);
+        // Search {node_name}.launch.xml
+        let launch_xml = read_to_string(search_file(
+            target_dir,
+            &format!("{}.launch.xml", node_name),
+        ))
+        .unwrap();
+        let composable_node = launch_parser.parse_launch_xml(&launch_xml);
+
+        complete_node_info.set_package_name(&composable_node.package);
+        complete_node_info.set_executable(&composable_node.executable.unwrap());
+        if let Some(remappings) = map_remappings(
+            composable_node.remappings.clone(),
+            subs.clone(),
+            pubs.clone(),
+        ) {
+            complete_node_info.set_remappings(remappings);
+        }
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
     }
 
     // Parse CMakeLists.txt to get executable name

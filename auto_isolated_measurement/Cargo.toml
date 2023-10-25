@@ -13,3 +13,4 @@ serde_yaml = "0.9.25"
 serde = { version = "1.0.189", features = ["derive"] }
 clap = { version = "4.2.4", features = ["derive"] }
 dirs = "5.0.1"
+strsim = "0.10.0"
