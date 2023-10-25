@@ -1,7 +1,7 @@
 use auto_isolated_measurement::parse_node_info::parse_node_info;
 use clap::Parser;
 use dirs::home_dir;
-// use std::fs::read_dir;
+use std::fs::read_dir;
 
 #[derive(Parser)]
 #[clap(name = "parse node info", version = "1.0", about = "")]
@@ -27,7 +27,7 @@ fn main() {
     // }
 
     parse_node_info(
-        "/home/atsushi/autoware_optimization_tools/auto_isolated_measurement/dynamic_node_info/perception-obstacle_segmentation-common_ground_filter.yaml",
+        "/home/atsushi/autoware_optimization_tools/auto_isolated_measurement/dynamic_node_info/map-map_projection_loader.yaml",
         &arg.parsed_dir
     )
 }

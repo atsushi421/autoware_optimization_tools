@@ -1,10 +1,10 @@
 use regex::{Regex, RegexBuilder};
-use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
-use std::io::Write;
-use std::{collections::HashMap, fs::File};
 use walkdir::WalkDir;
 
+use crate::edge_cases::parse_map_projection_loader;
+use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::plugin_parser::parse_plugin;
 use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
 
@@ -151,64 +151,6 @@ fn map_remappings(
     }
 }
 
-const OUTPUT_DIR: &str = "complete_node_info";
-
-#[derive(Serialize)]
-struct CompleteNodeInfo {
-    node_name: String,
-    package_name: Option<String>,
-    plugin_name: Option<String>,
-    remappings: Option<HashMap<String, String>>,
-    executable: Option<String>,
-}
-
-impl CompleteNodeInfo {
-    fn new(node_name: &str) -> Self {
-        Self {
-            node_name: node_name.to_string(),
-            package_name: None,
-            plugin_name: None,
-            remappings: None,
-            executable: None,
-        }
-    }
-
-    fn set_package_plugin_remappings(
-        &mut self,
-        package_name: &str,
-        plugin_name: &str,
-        remappings: HashMap<String, String>,
-    ) {
-        if self.package_name.is_some() || self.plugin_name.is_some() || self.remappings.is_some() {
-            unreachable!("package_name, plugin_name, and remappings are already set.");
-        }
-
-        self.package_name = Some(package_name.to_string());
-        self.plugin_name = Some(plugin_name.to_string());
-        self.remappings = Some(remappings);
-    }
-
-    fn exists_package_plugin_remappings(&self) -> bool {
-        self.package_name.is_some() && self.plugin_name.is_some() && self.remappings.is_some()
-    }
-
-    fn get_plugin_name(&self) -> &str {
-        self.plugin_name.as_ref().unwrap()
-    }
-
-    fn set_executable(&mut self, executable: &str) {
-        if self.executable.is_some() {
-            unreachable!("executable is already set.");
-        }
-
-        self.executable = Some(executable.to_string());
-    }
-
-    fn exists_executable(&self) -> bool {
-        self.executable.is_some()
-    }
-}
-
 pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let ros_node_name = NodeNameConverter::to_ros_node_name(
         dynamic_node_info_path
@@ -224,6 +166,16 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let pubs = get_remapped_topics_from_mapping(&dynamic_node_info, "Publishers");
 
     let mut complete_node_info = CompleteNodeInfo::new(&node_name);
+
+    // Edge case
+    if node_name == "map_projection_loader" {
+        let (package_name, executable) = parse_map_projection_loader(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_executable(&executable);
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
+    }
 
     let mut regex_finder = RegexFinder::new(&node_name);
 
@@ -257,21 +209,25 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 }
             });
 
-            complete_node_info.set_package_plugin_remappings(
-                &first_composable_node.package,
-                &parse_plugin(&first_composable_node.plugin, target_dir, &node_name),
-                map_remappings(
-                    first_composable_node.remappings.clone(),
-                    subs.clone(),
-                    pubs.clone(),
-                )
-                .unwrap(),
-            );
+            complete_node_info.set_package_name(&first_composable_node.package);
+            complete_node_info.set_plugin_name(&parse_plugin(
+                &first_composable_node.plugin,
+                target_dir,
+                &node_name,
+            ));
+
+            if let Some(remappings) = map_remappings(
+                first_composable_node.remappings.clone(),
+                subs.clone(),
+                pubs.clone(),
+            ) {
+                complete_node_info.set_remappings(remappings);
+            }
         }
     }
 
-    if !complete_node_info.exists_package_plugin_remappings() {
-        unreachable!("{} was not found.", node_name);
+    if !complete_node_info.exists_package_plugin() {
+        unreachable!("{} was not found.", ros_node_name);
     }
 
     // Parse CMakeLists.txt to get executable name
@@ -295,15 +251,5 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     }
 
     // Export
-    fs::create_dir_all(OUTPUT_DIR).unwrap();
-    let mut result = File::create(format!(
-        "{}/{}.yaml",
-        OUTPUT_DIR,
-        NodeNameConverter::to_file_name(&ros_node_name)
-    ))
-    .unwrap();
-    let yaml_string = serde_yaml::to_string(&complete_node_info).unwrap();
-    result
-        .write_all(yaml_string.as_bytes())
-        .expect("Failed to write to output file");
+    export_complete_node_info(&ros_node_name, &complete_node_info)
 }
