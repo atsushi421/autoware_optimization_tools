@@ -52,7 +52,7 @@ pub fn map_remappings(
                 );
                 false
             } else {
-                true
+                unreachable!()
             }
         })
     }
@@ -67,7 +67,7 @@ pub fn map_remappings(
         } else if from.contains("output") {
             fixed_remappings.insert(
                 from.replace('\"', ""),
-                choise_closest_str(&to, &mut pubs).unwrap(),
+                choise_closest_str(to, &mut pubs).unwrap(),
             );
             false
         } else {

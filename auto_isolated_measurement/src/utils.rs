@@ -78,11 +78,7 @@ pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<Str
         .iter()
         .filter_map(|(k, _)| {
             let k_str = k.as_str().unwrap().to_string();
-            if k == "/clock"
-                || k == "/parameter_events"
-                || k == "/rosout"
-                || k.as_str().unwrap().contains("debug")
-            {
+            if k == "/clock" || k == "/parameter_events" || k == "/rosout" {
                 None
             } else {
                 Some(k_str)
