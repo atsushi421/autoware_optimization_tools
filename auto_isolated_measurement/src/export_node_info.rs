@@ -58,6 +58,10 @@ impl CompleteNodeInfo {
         self.package_name.is_some() && self.plugin_name.is_some()
     }
 
+    pub fn get_package_name(&self) -> &str {
+        self.package_name.as_ref().unwrap()
+    }
+
     pub fn get_plugin_name(&self) -> &str {
         self.plugin_name.as_ref().unwrap()
     }

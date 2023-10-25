@@ -186,14 +186,6 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         }
         let file_path = entry.path().to_str().unwrap();
         if file_path.ends_with(".launch.py") {
-            // filter by namespace
-            if !namespace.split('/').collect::<Vec<&str>>()[1..]
-                .iter()
-                .any(|ns| file_path.contains(ns))
-            {
-                continue;
-            }
-
             let launch_file = fs::read_to_string(file_path).unwrap();
             let composable_nodes = regex_finder.find_composable_nodes(&launch_file);
             if composable_nodes.is_empty() {
@@ -208,6 +200,17 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                     unreachable!();
                 }
             });
+
+            let package_name = &first_composable_node.package;
+            let plugin_name = &parse_plugin(&first_composable_node.plugin, target_dir, &node_name);
+
+            // TODO: 複数ファイルにマッチがある場合の対応
+            if complete_node_info.exists_package_plugin()
+                && complete_node_info.get_package_name() == package_name
+                && complete_node_info.get_plugin_name() == plugin_name
+            {
+                continue;
+            }
 
             complete_node_info.set_package_name(&first_composable_node.package);
             complete_node_info.set_plugin_name(&parse_plugin(
