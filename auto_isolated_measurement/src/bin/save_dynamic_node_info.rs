@@ -3,13 +3,14 @@ use std::fs::{self, File};
 use std::io::Write;
 
 const OUTPUT_DIR: &str = "dynamic_node_info";
-const SKIP_NODES: [&str; 6] = [
+const SKIP_NODES: [&str; 7] = [
     "caret_",
     "launch_ros_",
     "rviz2",
     "rosbag2_player",
     "transform_listener_impl_",
     "container",
+    "/system/component_state_monitor/component",
 ];
 
 pub fn main() {
