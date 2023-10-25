@@ -1,4 +1,3 @@
-use dirs::{self, home_dir};
 use regex::{Regex, RegexBuilder};
 use serde::Serialize;
 use std::fs;
@@ -6,10 +5,7 @@ use std::io::Write;
 use std::{collections::HashMap, fs::File};
 use walkdir::WalkDir;
 
-use auto_isolated_measurement::utils::{
-    get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter,
-};
-use clap::Parser;
+use crate::utils::{get_remapped_topics_from_mapping, read_yaml_as_mapping, NodeNameConverter};
 
 struct ComposableNodeInfo {
     package: String,
@@ -211,7 +207,7 @@ impl CompleteNodeInfo {
     }
 }
 
-fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
+pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let ros_node_name = NodeNameConverter::to_ros_node_name(
         dynamic_node_info_path
             .split('/')
@@ -308,28 +304,4 @@ fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     result
         .write_all(yaml_string.as_bytes())
         .expect("Failed to write to output file");
-}
-
-#[derive(Parser)]
-#[clap(name = "parse node info", version = "1.0", about = "")]
-struct ArgParser {
-    /// Path to DAGSet directory.
-    #[clap(
-        short = 'd',
-        long = "dymanic_node_info_dir",
-        default_value = "dynamic_node_info"
-    )]
-    dymanic_node_info_dir: String,
-    /// Number of processing cores.
-    #[clap(short = 'p', long = "parsed_dir", default_value_t = home_dir().unwrap().to_str().unwrap().to_string() + "/autoware/src")]
-    parsed_dir: String,
-}
-
-fn main() {
-    let arg: ArgParser = ArgParser::parse();
-
-    for entry in fs::read_dir(arg.dymanic_node_info_dir).unwrap() {
-        let path = entry.unwrap().path();
-        parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
-    }
 }
