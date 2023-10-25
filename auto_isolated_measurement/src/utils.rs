@@ -71,15 +71,17 @@ pub fn read_yaml_as_mapping(path: &str) -> Mapping {
 }
 
 pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<String> {
-    mapping
-        .get(&serde_yaml::Value::from(key))
-        .unwrap()
+    mapping[key]
         .as_mapping()
         .unwrap()
         .iter()
         .filter_map(|(k, _)| {
             let k_str = k.as_str().unwrap().to_string();
-            if k == "/clock" || k == "/parameter_events" || k == "/rosout" {
+            if k == "/clock"
+                || k == "/parameter_events"
+                || k == "/rosout"
+                || k.as_str().unwrap().contains("debug")
+            {
                 None
             } else {
                 Some(k_str)

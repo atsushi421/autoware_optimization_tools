@@ -132,7 +132,7 @@ fn map_remappings(
     });
 
     // If there is one input and one output, they correspond to sub and pub respectively.
-    if original_remappings.len() <= 2 && subs.len() == 1 && pubs.len() == 1 {
+    if original_remappings.len() <= 2 && subs.len() <= 1 && pubs.len() <= 1 {
         for (from, _) in original_remappings {
             if from.contains("input") {
                 fixed_remappings.insert(from.replace('\"', ""), subs[0].clone());
