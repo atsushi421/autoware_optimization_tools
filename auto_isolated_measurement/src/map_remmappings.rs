@@ -2,14 +2,55 @@ use std::collections::HashMap;
 
 use strsim::levenshtein;
 
-fn choise_closest_str(target_str: &str, candidates: &mut Vec<String>) -> Option<String> {
-    let closest_index = candidates
-        .iter()
-        .enumerate()
-        .min_by_key(|&(_, candidate)| levenshtein(target_str, candidate))
-        .map(|(index, _)| index);
+// fn choice_closest_str(
+//     first_target_str: &str,
+//     second_target_str: &str,
+//     second_threshold: usize,
+//     candidates: &mut Vec<String>,
+// ) -> Option<String> {
+//     let distances: Vec<_> = candidates
+//         .iter()
+//         .map(|candidate| levenshtein(first_target_str, candidate))
+//         .collect();
+//     let (first_most_closest_i, &most_closest_distance) = distances
+//         .iter()
+//         .enumerate()
+//         .min_by_key(|&(_, distance)| distance)?;
+//     let close_candidates_indices: Vec<_> = distances
+//         .iter()
+//         .enumerate()
+//         .filter(|&(index, &distance)| {
+//             index != first_most_closest_i && distance <= most_closest_distance + second_threshold
+//         })
+//         .map(|(index, _)| index)
+//         .collect();
 
-    closest_index.map(|index| candidates.remove(index).to_string())
+//     let closest_i = close_candidates_indices
+//         .into_iter()
+//         .min_by_key(|&index| levenshtein(second_target_str, &candidates[index]))
+//         .unwrap_or(first_most_closest_i);
+
+//     Some(candidates.remove(closest_i))
+// }
+
+fn choice_closest_str(
+    first_target_str: &str,
+    second_target_str: &str,
+    candidates: &mut Vec<String>,
+) -> Option<String> {
+    let mut min_index = None;
+    let mut min_average_distance = usize::MAX;
+
+    for (index, candidate) in candidates.iter().enumerate() {
+        let distance =
+            levenshtein(first_target_str, candidate) + levenshtein(second_target_str, candidate);
+        if distance < min_average_distance {
+            min_index = Some(index);
+            min_average_distance = distance;
+        }
+    }
+
+    min_index.map(|index| candidates.remove(index))
 }
 
 pub fn map_remappings(
@@ -61,13 +102,13 @@ pub fn map_remappings(
         if from.contains("input") {
             fixed_remappings.insert(
                 from.replace('\"', ""),
-                choise_closest_str(to, &mut subs).unwrap(),
+                choice_closest_str(to, from, &mut subs).unwrap(),
             );
             false
         } else if from.contains("output") {
             fixed_remappings.insert(
                 from.replace('\"', ""),
-                choise_closest_str(to, &mut pubs).unwrap(),
+                choice_closest_str(to, from, &mut pubs).unwrap(),
             );
             false
         } else {
