@@ -27,3 +27,12 @@ pub fn parse_topic_state_monitor(target_dir: &str) -> (String, String) {
         caps.get(2).unwrap().as_str().to_string(),
     )
 }
+
+pub fn parse_driver_ros_wrapper_node(_target_dir: &str) -> (String, String, String) {
+    // HACK
+    (
+        "nebula_ros".to_string(),
+        "VelodyneDriverRosWrapper".to_string(),
+        "velodyne_driver_ros_wrapper_node".to_string(),
+    )
+}
