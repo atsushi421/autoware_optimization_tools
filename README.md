@@ -1,6 +1,13 @@
 # autoware_optimization_tools
 
-- `parse_node_info.py`: component containerのplugin名から、対象ノードのpackage_name, namespace, executable_name, node_name, remap情報を取得する
-- TODO: rosbag取得自動化
-- `isolated_run.bash`: 隔離環境を構築しつつ、単一ノード実行する。指定したtopicの内容を保存する機能あり。
-- TODO: topicの内容比較コマンド
+## parse_node_info
+[Screencast from 2023年10月27日 02時58分22秒.webm](https://github.com/atsushi421/autoware_optimization_tools/assets/55824710/2b6f3d25-a9be-4264-ad36-b879cdcafc96)
+
+## record_single_rosbags
+TBD
+
+## isolated_measure
+TBD
+
+## compare_topics
+TBD
