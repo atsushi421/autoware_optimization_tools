@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 
 use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_gyro_odometer};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
-use crate::map_remmappings::map_remappings;
+use crate::fix_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
 use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
