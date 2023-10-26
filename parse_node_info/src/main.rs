@@ -1,6 +1,6 @@
-use auto_isolated_measurement::{parse_node_info::parse_node_info, utils::create_progress_bar};
 use clap::Parser;
 use dirs::home_dir;
+use parse_node_info::{parse_node_info::parse_node_info, utils::create_progress_bar};
 use std::fs::read_dir;
 
 #[derive(Parser)]
