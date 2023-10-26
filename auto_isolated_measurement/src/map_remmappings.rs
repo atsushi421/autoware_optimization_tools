@@ -60,11 +60,11 @@ pub fn map_remappings(
     // If there is one input and one output, they correspond to sub and pub respectively.
     // TODO: refactor
     if original_remappings.len() <= 2 && subs.len() <= 1 && pubs.len() <= 1 {
-        original_remappings.retain(|(from, _)| {
-            if from.contains("input") {
+        original_remappings.retain(|(from, to)| {
+            if from.contains("input") || to.contains("input") {
                 fixed_remappings.insert(from.replace('\"', ""), subs.remove(0));
                 false
-            } else if from.contains("output") {
+            } else if from.contains("output") || to.contains("output") {
                 fixed_remappings.insert(from.replace('\"', ""), pubs.remove(0));
                 false
             } else if subs.len() + pubs.len() == 1 {
@@ -85,8 +85,8 @@ pub fn map_remappings(
         return Some(fixed_remappings);
     }
 
-    original_remappings.retain(|(from, _)| {
-        if from.contains("input") {
+    original_remappings.retain(|(from, to)| {
+        if from.contains("input") || to.contains("input") {
             let core_str = get_core_str(from);
             let count = subs.iter().filter(|sub_| sub_.contains(&core_str)).count();
             if count == 1 {
@@ -100,7 +100,7 @@ pub fn map_remappings(
             } else {
                 true
             }
-        } else if from.contains("output") {
+        } else if from.contains("output") || to.contains("output") {
             let core_str = get_core_str(from);
             let count = pubs.iter().filter(|pub_| pub_.contains(&core_str)).count();
             if count == 1 {
@@ -115,7 +115,28 @@ pub fn map_remappings(
                 true
             }
         } else {
-            unreachable!()
+            let core_str = get_core_str(from);
+            let count = subs.iter().filter(|sub_| sub_.contains(&core_str)).count()
+                + pubs.iter().filter(|pub_| pub_.contains(&core_str)).count();
+            if count == 1 {
+                let topic_name = if !subs.is_empty() {
+                    subs.remove(
+                        subs.iter()
+                            .position(|sub_| sub_.contains(&core_str))
+                            .unwrap(),
+                    )
+                } else {
+                    pubs.remove(
+                        pubs.iter()
+                            .position(|pub_| pub_.contains(&core_str))
+                            .unwrap(),
+                    )
+                };
+                fixed_remappings.insert(from.trim_matches('\"').to_string(), topic_name);
+                false
+            } else {
+                true
+            }
         }
     });
 
@@ -127,11 +148,11 @@ pub fn map_remappings(
         let mut min_distances: Vec<usize> = Vec::with_capacity(original_remappings.len());
         let mut closest_strs: Vec<String> = Vec::with_capacity(original_remappings.len());
         for (from, to) in original_remappings.iter() {
-            if from.contains("input") {
+            if from.contains("input") || to.contains("input") {
                 let (closest_str, min_distance) = get_closest_str(to, from, &subs);
                 closest_strs.push(closest_str);
                 min_distances.push(min_distance);
-            } else if from.contains("output") {
+            } else if from.contains("output") || to.contains("output") {
                 let (closest_str, min_distance) = get_closest_str(to, from, &pubs);
                 closest_strs.push(closest_str);
                 min_distances.push(min_distance);

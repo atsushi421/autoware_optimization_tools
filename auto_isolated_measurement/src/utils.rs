@@ -95,7 +95,7 @@ pub fn search_files(target_dir: &str, file_name: &str) -> Vec<String> {
     WalkDir::new(target_dir)
         .into_iter()
         .filter_map(Result::ok)
-        .filter(|entry| entry.file_name().to_str() == Some(file_name))
+        .filter(|entry| entry.file_name().to_string_lossy() == file_name)
         .map(|entry| entry.path().to_string_lossy().into_owned())
         .collect()
 }

@@ -1,7 +1,7 @@
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::parse_driver_ros_wrapper_node;
+use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_gyro_odometer};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::map_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
@@ -33,6 +33,31 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         complete_node_info.set_executable(&executable);
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
+    } else if node_name == "gyro_odometer" {
+        let (package_name, executable, remappings) = parse_gyro_odometer(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_executable(&executable);
+        if let Some(fixed_remappings) =
+            map_remappings(remappings.clone(), subs.clone(), pubs.clone())
+        {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
+    } else if node_name == "occupancy_grid_map_node" {
+        let (package_name, plugin_name, remappings) =
+            crate::edge_cases::parse_occupancy_grid_map_node(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_plugin_name(&plugin_name);
+        if let Some(fixed_remappings) =
+            map_remappings(remappings.clone(), subs.clone(), pubs.clone())
+        {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
@@ -86,10 +111,11 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             ));
 
             if let Some(original_remappings) = &first_composable_node.remappings {
-                complete_node_info.set_remappings(
+                if let Some(fixed_remappings) =
                     map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
-                        .unwrap(),
-                );
+                {
+                    complete_node_info.set_remappings(fixed_remappings);
+                }
             }
         }
     }
@@ -98,7 +124,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     if !complete_node_info.exists_package_plugin() {
         let mut launch_xml = None;
         let mut key_str = node_name;
-        while key_str != "" {
+        while !key_str.is_empty() {
             let launch_xmls = search_files(target_dir, &format!("{}.launch.xml", key_str));
             if launch_xmls.is_empty() {
                 key_str = key_str.split('_').collect::<Vec<&str>>()
@@ -111,7 +137,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 launch_xml = Some(read_to_string(&launch_xmls[0]).unwrap());
                 break;
             }
-            if launch_xmls.len() >= 2 {
+            if launch_xmls.len() >= 2 && !key_str.is_empty() {
                 unreachable!();
             }
         }

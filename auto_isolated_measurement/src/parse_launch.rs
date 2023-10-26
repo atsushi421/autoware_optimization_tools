@@ -115,12 +115,15 @@ impl LaunchParser {
     }
 
     pub fn parse_launch_xml(&self, launch_xml: &str) -> LaunchParseResult {
-        let cap = self.launch_xml_pattern.captures(launch_xml).unwrap();
-        LaunchParseResult::new(
-            cap.get(1).unwrap().as_str(),
-            None,
-            Some(cap.get(2).unwrap().as_str()),
-            self.parse_launch_xml_remappings(launch_xml),
-        )
+        if let Some(cap) = self.launch_xml_pattern.captures(launch_xml) {
+            LaunchParseResult::new(
+                cap.get(1).unwrap().as_str(),
+                None,
+                Some(cap.get(2).unwrap().as_str()),
+                self.parse_launch_xml_remappings(launch_xml),
+            )
+        } else {
+            unreachable!()
+        }
     }
 }

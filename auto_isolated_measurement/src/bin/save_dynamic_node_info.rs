@@ -3,7 +3,7 @@ use std::fs::{self, File};
 use std::io::Write;
 
 const OUTPUT_DIR: &str = "dynamic_node_info";
-const SKIP_NODES: [&str; 8] = [
+const SKIP_NODES: [&str; 9] = [
     "caret_",
     "launch_ros_",
     "rviz2",
@@ -12,6 +12,7 @@ const SKIP_NODES: [&str; 8] = [
     "container",
     "/system/component_state_monitor/component", // not executable
     "default_ad_api",                            // not working in rosbag replay simulation
+    "autoware_api/external/rtc_controller/node", // not working in rosbag replay simulation
 ];
 
 pub fn main() {
