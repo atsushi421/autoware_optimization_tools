@@ -10,7 +10,7 @@ use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
 use crate::utils::{read_yaml_as_mapping, search_files, NodeNameConverter};
 
-pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<String> {
+fn get_remapped_topics(mapping: &Mapping, key: &str) -> Vec<String> {
     mapping[key]
         .as_mapping()
         .unwrap()
@@ -43,11 +43,12 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     );
     let (namespace, node_name) = NodeNameConverter::to_namespace_and_node_name(&ros_node_name);
     let dynamic_node_info = read_yaml_as_mapping(dynamic_node_info_path);
-    let subs = get_remapped_topics_from_mapping(&dynamic_node_info, "Subscribers");
-    let pubs = get_remapped_topics_from_mapping(&dynamic_node_info, "Publishers");
+    let subs = get_remapped_topics(&dynamic_node_info, "Subscribers");
+    let pubs = get_remapped_topics(&dynamic_node_info, "Publishers");
 
     let mut complete_node_info = CompleteNodeInfo::new(&namespace, &node_name);
 
+    // TODO: refactor
     // Edge case
     if node_name.contains("_driver_ros_wrapper_node") {
         let (package_name, plugin_name, executable) = parse_driver_ros_wrapper_node(target_dir);
@@ -108,7 +109,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
     let launch_parser = LaunchParser::new(&node_name);
 
-    // Parse launch files to get package name, plugin name, and remappings
+    // Parse launch.py
     for entry in WalkDir::new(target_dir).into_iter().flatten() {
         if entry.file_type().is_dir() {
             continue;
@@ -116,8 +117,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         let file_path = entry.path().to_str().unwrap();
 
         if file_path.ends_with(".launch.py") {
-            let launch_file = fs::read_to_string(file_path).unwrap();
-            let composable_nodes = launch_parser.parse_candidate_py(&launch_file);
+            let launch_py = fs::read_to_string(file_path).unwrap();
+            let composable_nodes = launch_parser.parse_candidate_py(&launch_py);
             if composable_nodes.is_empty() {
                 continue;
             }
@@ -125,8 +126,6 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             let first_composable_node = &composable_nodes[0];
             composable_nodes.iter().for_each(|composable_node| {
                 if first_composable_node != composable_node {
-                    // HACK: Multiple composable_node matches in the same file,
-                    //       only one of which needs to be considered
                     unreachable!();
                 }
             });
@@ -138,13 +137,14 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 &node_name,
             );
 
-            // TODO: 複数ファイルにマッチがある場合の対応
+            // Cases where there is a match in more than one file
             if complete_node_info.exists_package_plugin() {
                 if complete_node_info.get_package_name() == package_name
                     && complete_node_info.get_plugin_name() == plugin_name
                 {
                     continue;
                 } else {
+                    // HACK: Get the component from the remapped topic name and select it if it is included in the namespace
                     let to = &complete_node_info.get_remappings().values().next().unwrap();
                     if to.contains(namespace.split('/').next().unwrap()) {
                         continue;
@@ -152,13 +152,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 }
             }
 
-            complete_node_info.set_package_name(&first_composable_node.package);
-            complete_node_info.set_plugin_name(&parse_plugin(
-                first_composable_node.plugin.as_ref().unwrap(),
-                target_dir,
-                &node_name,
-            ));
-
+            complete_node_info.set_package_name(package_name);
+            complete_node_info.set_plugin_name(plugin_name);
             if let Some(original_remappings) = &first_composable_node.remappings {
                 if let Some(fixed_remappings) =
                     map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
@@ -169,8 +164,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         }
     }
 
-    // Search launch.xml
     if !complete_node_info.exists_package_plugin() {
+        // Search launch.xml
         for entry in WalkDir::new(target_dir).into_iter().flatten() {
             if entry.file_type().is_dir() {
                 continue;
@@ -178,8 +173,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             let file_path = entry.path().to_str().unwrap();
 
             if file_path.ends_with(".launch.xml") {
-                let launch_file = fs::read_to_string(file_path).unwrap();
-                if let Some(composable_node) = launch_parser.parse_candidate_xml(&launch_file) {
+                let launch_xml = fs::read_to_string(file_path).unwrap();
+                if let Some(composable_node) = launch_parser.parse_candidate_xml(&launch_xml) {
                     complete_node_info.set_package_name(&composable_node.package);
                     complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
                     if let Some(original_remappings) = composable_node.remappings {
@@ -194,37 +189,41 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         }
     }
 
-    // Search {node_name}.launch.xml
     if !complete_node_info.exists_package_plugin() {
+        // Search {key_str}.launch.xml
         let mut launch_xml = None;
         let mut key_str = node_name;
         while !key_str.is_empty() {
-            let launch_xmls = search_files(target_dir, &format!("{}.launch.xml", key_str));
-            if launch_xmls.is_empty() {
-                key_str = key_str.split('_').collect::<Vec<&str>>()
-                    [..key_str.split('_').count() - 1]
-                    .join("_");
+            let candidate_launch_xmls =
+                search_files(target_dir, &format!("{}.launch.xml", key_str));
 
-                continue;
-            }
-            if launch_xmls.len() == 1 {
-                launch_xml = Some(read_to_string(&launch_xmls[0]).unwrap());
-                break;
-            }
-            if launch_xmls.len() >= 2 && !key_str.is_empty() {
-                // launch_xmlsのうち、</node>が含まれているものを選択
-                let mut node_contain_count = 0;
-                for launch_xml_ in launch_xmls {
-                    let content = read_to_string(launch_xml_).unwrap();
-                    if content.contains("</node>") {
-                        launch_xml = Some(content);
-                        node_contain_count += 1;
-                        if node_contain_count > 1 {
-                            unreachable!()
+            match candidate_launch_xmls.len() {
+                0 => {
+                    key_str = key_str.split('_').collect::<Vec<&str>>()
+                        [..key_str.split('_').count() - 1]
+                        .join("_");
+
+                    continue;
+                }
+                1 => {
+                    launch_xml = Some(read_to_string(&candidate_launch_xmls[0]).unwrap());
+                    break;
+                }
+                _ => {
+                    // Select the launch_xml that contain "</node>".
+                    let mut node_contain_count = 0;
+                    for candidate in candidate_launch_xmls {
+                        let content = read_to_string(candidate).unwrap();
+                        if content.contains("</node>") {
+                            launch_xml = Some(content);
+                            node_contain_count += 1;
+                            if node_contain_count > 1 {
+                                unreachable!()
+                            }
                         }
                     }
+                    break;
                 }
-                break;
             }
         }
 
@@ -243,23 +242,22 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 complete_node_info.set_remappings(fixed_remappings);
             }
         }
-
-        export_complete_node_info(&ros_node_name, &complete_node_info);
-        return;
     }
 
-    // Parse CMakeLists.txt to get executable name
-    let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
-    for entry in WalkDir::new(target_dir).into_iter().flatten() {
-        if entry.file_type().is_dir() {
-            continue;
-        }
-        let file_path = entry.path().to_str().unwrap();
-        if file_path.ends_with("CMakeLists.txt") {
-            let cmake_file = fs::read_to_string(file_path).unwrap();
-            if let Some(executable) = executable_parser.find_executable(&cmake_file) {
-                complete_node_info.set_executable(&executable);
-                break;
+    if !complete_node_info.exists_executable() {
+        // Parse CMakeLists.txt to get executable name
+        let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
+        for entry in WalkDir::new(target_dir).into_iter().flatten() {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let file_path = entry.path().to_str().unwrap();
+            if file_path.ends_with("CMakeLists.txt") {
+                let cmake_file = fs::read_to_string(file_path).unwrap();
+                if let Some(executable) = executable_parser.find_executable(&cmake_file) {
+                    complete_node_info.set_executable(&executable);
+                    break;
+                }
             }
         }
     }
