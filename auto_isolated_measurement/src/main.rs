@@ -4,30 +4,30 @@ use dirs::home_dir;
 use std::fs::read_dir;
 
 #[derive(Parser)]
-#[clap(name = "parse node info", version = "1.0", about = "")]
+#[clap(name = "parse all node info", version = "1.0", about = "")]
 struct ArgParser {
-    /// Path to DAGSet directory.
+    /// Path to dynamic_node_info directory.
     #[clap(
         short = 'd',
-        long = "dymanic_node_info_dir",
+        long = "dynamic_node_info_dir",
         default_value = "dynamic_node_info"
     )]
-    dymanic_node_info_dir: String,
-    /// Number of processing cores.
+    dynamic_node_info_dir: String,
+    /// Path to parsed directory.
     #[clap(short = 'p', long = "parsed_dir", default_value_t = home_dir().unwrap().to_str().unwrap().to_string() + "/autoware/src")]
     parsed_dir: String,
 }
 
 fn main() {
     let arg: ArgParser = ArgParser::parse();
+    let dynamic_node_infos: Vec<_> = read_dir(arg.dynamic_node_info_dir).unwrap().collect();
+    let pb = create_progress_bar(dynamic_node_infos.len() as i32);
 
-    let dymanic_node_infos = read_dir(arg.dymanic_node_info_dir).unwrap();
-    let entries: Vec<_> = dymanic_node_infos.collect(); // エントリをベクタにコレクト
-    let pb = create_progress_bar(entries.len() as i32);
-
-    for entry in entries {
+    for dynamic_node_info in dynamic_node_infos {
         pb.inc(1);
-        let path = entry.unwrap().path();
-        parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
+        parse_node_info(
+            dynamic_node_info.unwrap().path().to_str().unwrap(),
+            &arg.parsed_dir,
+        );
     }
 }
