@@ -4,7 +4,7 @@ use walkdir::WalkDir;
 
 use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_gyro_odometer};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
-use crate::fix_remmappings::map_remappings;
+use crate::fix_remmappings::fix_remappings;
 use crate::parse_executable::ExecutableParser;
 use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
@@ -43,8 +43,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     );
     let (namespace, node_name) = NodeNameConverter::to_namespace_and_node_name(&ros_node_name);
     let dynamic_node_info = read_yaml_as_mapping(dynamic_node_info_path);
-    let subs = get_remapped_topics(&dynamic_node_info, "Subscribers");
-    let pubs = get_remapped_topics(&dynamic_node_info, "Publishers");
+    let mut subs = get_remapped_topics(&dynamic_node_info, "Subscribers");
+    let mut pubs = get_remapped_topics(&dynamic_node_info, "Publishers");
 
     let mut complete_node_info = CompleteNodeInfo::new(&namespace, &node_name);
 
@@ -59,25 +59,21 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
     } else if node_name == "gyro_odometer" {
-        let (package_name, executable, remappings) = parse_gyro_odometer(target_dir);
+        let (package_name, executable, mut remappings) = parse_gyro_odometer(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_executable(&executable);
-        if let Some(fixed_remappings) =
-            map_remappings(remappings.clone(), subs.clone(), pubs.clone())
-        {
+        if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {
             complete_node_info.set_remappings(fixed_remappings);
         }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
     } else if node_name == "occupancy_grid_map_node" {
-        let (package_name, plugin_name, remappings) =
+        let (package_name, plugin_name, mut remappings) =
             crate::edge_cases::parse_occupancy_grid_map_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
-        if let Some(fixed_remappings) =
-            map_remappings(remappings.clone(), subs.clone(), pubs.clone())
-        {
+        if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {
             complete_node_info.set_remappings(fixed_remappings);
         }
 
@@ -155,8 +151,9 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             complete_node_info.set_package_name(package_name);
             complete_node_info.set_plugin_name(plugin_name);
             if let Some(original_remappings) = &first_composable_node.remappings {
+                let mut remappings_clone = original_remappings.clone();
                 if let Some(fixed_remappings) =
-                    map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+                    fix_remappings(&mut remappings_clone, &mut subs, &mut pubs)
                 {
                     complete_node_info.set_remappings(fixed_remappings);
                 }
@@ -177,9 +174,9 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 if let Some(composable_node) = launch_parser.parse_candidate_xml(&launch_xml) {
                     complete_node_info.set_package_name(&composable_node.package);
                     complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
-                    if let Some(original_remappings) = composable_node.remappings {
+                    if let Some(mut original_remappings) = composable_node.remappings {
                         if let Some(fixed_remappings) =
-                            map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+                            fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
                         {
                             complete_node_info.set_remappings(fixed_remappings);
                         }
@@ -235,9 +232,9 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
-        if let Some(original_remappings) = composable_node.remappings {
+        if let Some(mut original_remappings) = composable_node.remappings {
             if let Some(fixed_remappings) =
-                map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+                fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
             {
                 complete_node_info.set_remappings(fixed_remappings);
             }

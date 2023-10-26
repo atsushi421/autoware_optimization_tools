@@ -2,6 +2,8 @@ use std::collections::HashMap;
 
 use strsim::levenshtein;
 
+use crate::utils::remove_by_str;
+
 fn get_closest_str(target_str0: &str, target_str1: &str, candidates: &[String]) -> (String, usize) {
     let mut min_index = None;
     let mut min_average_distance = usize::MAX;
@@ -16,14 +18,14 @@ fn get_closest_str(target_str0: &str, target_str1: &str, candidates: &[String]) 
     }
 
     if candidates.is_empty() {
-        panic!("candidates is empty");
+        unreachable!("candidates is empty");
     }
 
     (candidates[min_index.unwrap()].clone(), min_average_distance)
 }
 
-fn get_core_str(topic: &str) -> String {
-    topic
+fn get_core_str(original_str: &str) -> String {
+    original_str
         .replace('"', "")
         .split('/')
         .collect::<Vec<&str>>()
@@ -32,10 +34,10 @@ fn get_core_str(topic: &str) -> String {
         .to_string()
 }
 
-pub fn map_remappings(
-    mut original_remappings: Vec<(String, String)>,
-    mut subs: Vec<String>,
-    mut pubs: Vec<String>,
+pub fn fix_remappings(
+    original_remappings: &mut Vec<(String, String)>,
+    subs: &mut Vec<String>,
+    pubs: &mut Vec<String>,
 ) -> Option<HashMap<String, String>> {
     original_remappings.retain(|(from, to)| !from.contains("debug") || !to.contains("debug"));
 
@@ -62,7 +64,6 @@ pub fn map_remappings(
     }
 
     // If there is one input and one output, they correspond to sub and pub respectively.
-    // TODO: refactor
     if original_remappings.len() <= 2 && subs.len() <= 1 && pubs.len() <= 1 {
         original_remappings.retain(|(from, to)| {
             if from.contains("input") || to.contains("input") {
@@ -89,56 +90,49 @@ pub fn map_remappings(
         return Some(fixed_remappings);
     }
 
+    // Fix by core_str
     original_remappings.retain(|(from, to)| {
+        let core_str = get_core_str(from);
+
         if from.contains("input") || to.contains("input") {
-            let core_str = get_core_str(from);
-            let count = subs.iter().filter(|sub_| sub_.contains(&core_str)).count();
-            if count == 1 {
-                let sub_topic_name = subs.remove(
-                    subs.iter()
-                        .position(|sub_| sub_.contains(&core_str))
-                        .unwrap(),
+            if subs.iter().filter(|sub_| sub_.contains(&core_str)).count() == 1 {
+                fixed_remappings.insert(
+                    from.trim_matches('\"').to_string(),
+                    remove_by_str(subs, &core_str),
                 );
-                fixed_remappings.insert(from.trim_matches('\"').to_string(), sub_topic_name);
                 false
             } else {
                 true
             }
         } else if from.contains("output") || to.contains("output") {
-            let core_str = get_core_str(from);
-            let count = pubs.iter().filter(|pub_| pub_.contains(&core_str)).count();
-            if count == 1 {
-                let pub_topic_name = pubs.remove(
-                    pubs.iter()
-                        .position(|pub_| pub_.contains(&core_str))
-                        .unwrap(),
+            if pubs.iter().filter(|pub_| pub_.contains(&core_str)).count() == 1 {
+                fixed_remappings.insert(
+                    from.trim_matches('\"').to_string(),
+                    remove_by_str(pubs, &core_str),
                 );
-                fixed_remappings.insert(from.trim_matches('\"').to_string(), pub_topic_name);
                 false
             } else {
                 true
             }
-        } else {
-            let core_str = get_core_str(from);
-            let count = subs.iter().filter(|sub_| sub_.contains(&core_str)).count()
-                + pubs.iter().filter(|pub_| pub_.contains(&core_str)).count();
-            if count == 1 {
-                let combined = [&subs[..], &pubs[..]].concat();
-                let topic_name = match combined.iter().position(|x| x.contains(&core_str)) {
-                    Some(pos) => {
-                        if pos < subs.len() {
-                            subs.remove(pos)
-                        } else {
-                            pubs.remove(pos - subs.len())
-                        }
+        } else if subs.iter().filter(|sub_| sub_.contains(&core_str)).count()
+            + pubs.iter().filter(|pub_| pub_.contains(&core_str)).count()
+            == 1
+        {
+            let combined = [&subs[..], &pubs[..]].concat();
+            let topic_name = match combined.iter().position(|x| x.contains(&core_str)) {
+                Some(pos) => {
+                    if pos < subs.len() {
+                        subs.remove(pos)
+                    } else {
+                        pubs.remove(pos - subs.len())
                     }
-                    None => unreachable!(),
-                };
-                fixed_remappings.insert(from.trim_matches('\"').to_string(), topic_name);
-                false
-            } else {
-                true
-            }
+                }
+                None => unreachable!(),
+            };
+            fixed_remappings.insert(from.trim_matches('\"').to_string(), topic_name);
+            false
+        } else {
+            true
         }
     });
 
@@ -146,14 +140,15 @@ pub fn map_remappings(
         return Some(fixed_remappings);
     }
 
+    // Fix by levenshtein distance
     while (!subs.is_empty() || !pubs.is_empty()) && !original_remappings.is_empty() {
         let mut min_distances: Vec<usize> = Vec::with_capacity(original_remappings.len());
         let mut closest_strs: Vec<String> = Vec::with_capacity(original_remappings.len());
+
         original_remappings.retain(|(from, to)| {
             if from.contains("input") || to.contains("input") {
                 if subs.is_empty() {
-                    // このoriginal_remappingsから削除する
-                    return false;
+                    return false; // remove
                 }
 
                 let (closest_str, min_distance) = get_closest_str(to, from, &subs);
@@ -161,8 +156,7 @@ pub fn map_remappings(
                 min_distances.push(min_distance);
             } else if from.contains("output") || to.contains("output") {
                 if pubs.is_empty() {
-                    // このoriginal_remappingsから削除する
-                    return false;
+                    return false; // remove
                 }
 
                 let (closest_str, min_distance) = get_closest_str(to, from, &pubs);
@@ -174,7 +168,7 @@ pub fn map_remappings(
                 closest_strs.push(closest_str);
                 min_distances.push(min_distance);
             }
-            true // retainするためにtrueを返す
+            true
         });
 
         if original_remappings.is_empty() {

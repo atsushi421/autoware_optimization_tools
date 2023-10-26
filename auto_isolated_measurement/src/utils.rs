@@ -69,3 +69,12 @@ pub fn search_files(target_dir: &str, file_name: &str) -> Vec<String> {
         .map(|entry| entry.path().to_string_lossy().into_owned())
         .collect()
 }
+
+pub fn remove_by_str(target: &mut Vec<String>, remove_str: &str) -> String {
+    target.remove(
+        target
+            .iter()
+            .position(|value| value.contains(&remove_str))
+            .unwrap(),
+    )
+}
