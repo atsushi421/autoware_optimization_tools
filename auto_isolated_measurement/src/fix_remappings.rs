@@ -25,13 +25,18 @@ fn get_closest_str(target_str0: &str, target_str1: &str, candidates: &[String]) 
 }
 
 fn get_core_str(original_str: &str) -> String {
-    original_str
+    let core_str = original_str
         .replace('"', "")
         .split('/')
         .collect::<Vec<&str>>()
         .last()
         .unwrap()
-        .to_string()
+        .to_string();
+    if core_str.contains("odom") {
+        "kinematic_state".to_string()
+    } else {
+        core_str
+    }
 }
 
 pub fn fix_remappings(
