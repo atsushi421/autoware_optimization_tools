@@ -59,6 +59,21 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             complete_node_info.set_remappings(fixed_remappings);
         }
 
+        let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
+        for entry in WalkDir::new(target_dir).into_iter().flatten() {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let file_path = entry.path().to_str().unwrap();
+            if file_path.ends_with("CMakeLists.txt") {
+                let cmake_file = fs::read_to_string(file_path).unwrap();
+                if let Some(executable) = executable_parser.find_executable(&cmake_file) {
+                    complete_node_info.set_executable(&executable);
+                    break;
+                }
+            }
+        }
+
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
     } else if node_name == "aggregator_node" {

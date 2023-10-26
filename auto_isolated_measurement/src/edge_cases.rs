@@ -9,7 +9,7 @@ pub fn parse_occupancy_grid_map_node(_target_dir: &str) -> (String, String, Vec<
 
     (
         result.package.clone(),
-        result.plugin.as_ref().unwrap().clone(),
+        result.plugin.as_ref().unwrap().replace('"', "").clone(),
         result.remappings.as_ref().unwrap().clone(),
     )
 }
