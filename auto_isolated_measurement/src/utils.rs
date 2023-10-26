@@ -1,6 +1,6 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_yaml::Mapping;
-use std::{collections::HashMap, process::Command};
+use walkdir::WalkDir;
 
 pub struct NodeNameConverter {}
 
@@ -44,15 +44,6 @@ impl NodeNameConverter {
     }
 }
 
-pub fn run_command(command: &str) -> String {
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg(command)
-        .output()
-        .expect("failed to execute command");
-    String::from_utf8(output.stdout).unwrap()
-}
-
 pub fn create_progress_bar(len: i32) -> ProgressBar {
     let pb = indicatif::ProgressBar::new(len as u64);
     pb.set_style(
@@ -70,20 +61,20 @@ pub fn read_yaml_as_mapping(path: &str) -> Mapping {
     yaml.as_mapping().unwrap().clone()
 }
 
-pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<String> {
-    mapping
-        .get(&serde_yaml::Value::from(key))
-        .unwrap()
-        .as_mapping()
-        .unwrap()
-        .iter()
-        .filter_map(|(k, _)| {
-            let k_str = k.as_str().unwrap().to_string();
-            if k == "/clock" || k == "/parameter_events" || k == "/rosout" {
-                None
-            } else {
-                Some(k_str)
-            }
-        })
+pub fn search_files(target_dir: &str, file_name: &str) -> Vec<String> {
+    WalkDir::new(target_dir)
+        .into_iter()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_name().to_string_lossy() == file_name)
+        .map(|entry| entry.path().to_string_lossy().into_owned())
         .collect()
+}
+
+pub fn remove_by_str(target: &mut Vec<String>, remove_str: &str) -> String {
+    target.remove(
+        target
+            .iter()
+            .position(|value| value.contains(&remove_str))
+            .unwrap(),
+    )
 }
