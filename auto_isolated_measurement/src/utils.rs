@@ -78,7 +78,11 @@ pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<Str
         .iter()
         .filter_map(|(k, _)| {
             let k_str = k.as_str().unwrap().to_string();
-            if k == "/clock" || k == "/parameter_events" || k == "/rosout" {
+            if k == "/clock"
+                || k == "/parameter_events"
+                || k == "/rosout"
+                || k.as_str().unwrap().contains("debug")
+            {
                 None
             } else {
                 Some(k_str)
@@ -88,10 +92,14 @@ pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<Str
 }
 
 pub fn search_file(target_dir: &str, file_name: &str) -> String {
-    WalkDir::new(target_dir)
+    if let Some(file_path) = WalkDir::new(target_dir)
         .into_iter()
         .filter_map(Result::ok)
         .find(|entry| entry.file_name().to_str() == Some(file_name))
         .map(|entry| entry.path().to_string_lossy().into_owned())
-        .unwrap()
+    {
+        file_path
+    } else {
+        unreachable!();
+    }
 }

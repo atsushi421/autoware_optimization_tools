@@ -2,55 +2,30 @@ use std::collections::HashMap;
 
 use strsim::levenshtein;
 
-// fn choice_closest_str(
-//     first_target_str: &str,
-//     second_target_str: &str,
-//     second_threshold: usize,
-//     candidates: &mut Vec<String>,
-// ) -> Option<String> {
-//     let distances: Vec<_> = candidates
-//         .iter()
-//         .map(|candidate| levenshtein(first_target_str, candidate))
-//         .collect();
-//     let (first_most_closest_i, &most_closest_distance) = distances
-//         .iter()
-//         .enumerate()
-//         .min_by_key(|&(_, distance)| distance)?;
-//     let close_candidates_indices: Vec<_> = distances
-//         .iter()
-//         .enumerate()
-//         .filter(|&(index, &distance)| {
-//             index != first_most_closest_i && distance <= most_closest_distance + second_threshold
-//         })
-//         .map(|(index, _)| index)
-//         .collect();
-
-//     let closest_i = close_candidates_indices
-//         .into_iter()
-//         .min_by_key(|&index| levenshtein(second_target_str, &candidates[index]))
-//         .unwrap_or(first_most_closest_i);
-
-//     Some(candidates.remove(closest_i))
-// }
-
-fn choice_closest_str(
-    first_target_str: &str,
-    second_target_str: &str,
-    candidates: &mut Vec<String>,
-) -> Option<String> {
+fn get_closest_str(target_str0: &str, target_str1: &str, candidates: &[String]) -> (String, usize) {
     let mut min_index = None;
     let mut min_average_distance = usize::MAX;
 
     for (index, candidate) in candidates.iter().enumerate() {
-        let distance =
-            levenshtein(first_target_str, candidate) + levenshtein(second_target_str, candidate);
-        if distance < min_average_distance {
+        let ave_distance =
+            levenshtein(target_str0, candidate) + levenshtein(target_str1, candidate) / 2;
+        if ave_distance < min_average_distance {
             min_index = Some(index);
-            min_average_distance = distance;
+            min_average_distance = ave_distance;
         }
     }
 
-    min_index.map(|index| candidates.remove(index))
+    (candidates[min_index.unwrap()].clone(), min_average_distance)
+}
+
+fn get_core_str(topic: &str) -> String {
+    topic
+        .replace('"', "")
+        .split('/')
+        .collect::<Vec<&str>>()
+        .last()
+        .unwrap()
+        .to_string()
 }
 
 pub fn map_remappings(
@@ -58,6 +33,12 @@ pub fn map_remappings(
     mut subs: Vec<String>,
     mut pubs: Vec<String>,
 ) -> Option<HashMap<String, String>> {
+    original_remappings.retain(|(from, to)| !from.contains("debug") || !to.contains("debug"));
+
+    if original_remappings.is_empty() {
+        return None;
+    }
+
     let mut fixed_remappings = HashMap::new();
 
     // First, the topics for which the remapping string is directly specified are mapped.
@@ -71,6 +52,10 @@ pub fn map_remappings(
             true
         }
     });
+
+    if original_remappings.is_empty() {
+        return Some(fixed_remappings);
+    }
 
     // If there is one input and one output, they correspond to sub and pub respectively.
     // TODO: refactor
@@ -95,26 +80,79 @@ pub fn map_remappings(
             } else {
                 unreachable!()
             }
-        })
+        });
+
+        return Some(fixed_remappings);
     }
 
-    original_remappings.retain(|(from, to)| {
+    original_remappings.retain(|(from, _)| {
         if from.contains("input") {
-            fixed_remappings.insert(
-                from.replace('\"', ""),
-                choice_closest_str(to, from, &mut subs).unwrap(),
-            );
-            false
+            let core_str = get_core_str(from);
+            let count = subs.iter().filter(|sub_| sub_.contains(&core_str)).count();
+            if count == 1 {
+                let sub_topic_name = subs.remove(
+                    subs.iter()
+                        .position(|sub_| sub_.contains(&core_str))
+                        .unwrap(),
+                );
+                fixed_remappings.insert(from.trim_matches('\"').to_string(), sub_topic_name);
+                false
+            } else {
+                true
+            }
         } else if from.contains("output") {
-            fixed_remappings.insert(
-                from.replace('\"', ""),
-                choice_closest_str(to, from, &mut pubs).unwrap(),
-            );
-            false
+            let core_str = get_core_str(from);
+            let count = pubs.iter().filter(|pub_| pub_.contains(&core_str)).count();
+            if count == 1 {
+                let pub_topic_name = pubs.remove(
+                    pubs.iter()
+                        .position(|pub_| pub_.contains(&core_str))
+                        .unwrap(),
+                );
+                fixed_remappings.insert(from.trim_matches('\"').to_string(), pub_topic_name);
+                false
+            } else {
+                true
+            }
         } else {
             unreachable!()
         }
     });
+
+    if original_remappings.is_empty() {
+        return Some(fixed_remappings);
+    }
+
+    while (!subs.is_empty() || !pubs.is_empty()) && !original_remappings.is_empty() {
+        let mut min_distances: Vec<usize> = Vec::with_capacity(original_remappings.len());
+        let mut closest_strs: Vec<String> = Vec::with_capacity(original_remappings.len());
+        for (from, to) in original_remappings.iter() {
+            if from.contains("input") {
+                let (closest_str, min_distance) = get_closest_str(to, from, &subs);
+                closest_strs.push(closest_str);
+                min_distances.push(min_distance);
+            } else if from.contains("output") {
+                let (closest_str, min_distance) = get_closest_str(to, from, &pubs);
+                closest_strs.push(closest_str);
+                min_distances.push(min_distance);
+            } else {
+                unreachable!();
+            }
+        }
+
+        let min_index = min_distances
+            .iter()
+            .enumerate()
+            .min_by_key(|&(_, v)| v)
+            .map(|(i, _)| i)
+            .unwrap();
+
+        let (from, _) = original_remappings.remove(min_index);
+        let closest_str = closest_strs.remove(min_index);
+        subs.retain(|sub_| sub_ != &closest_str);
+        pubs.retain(|pub_| pub_ != &closest_str);
+        fixed_remappings.insert(from.replace('\"', ""), closest_str);
+    }
 
     if fixed_remappings.is_empty() {
         None
