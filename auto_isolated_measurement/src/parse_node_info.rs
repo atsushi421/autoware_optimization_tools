@@ -61,6 +61,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
+    } else if node_name == "aggregator_node" {
+        let (package_name, executable) = crate::edge_cases::parse_aggregator_node(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_executable(&executable);
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
     }
 
     let launch_parser = LaunchParser::new(&node_name);
@@ -96,11 +103,17 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             );
 
             // TODO: 複数ファイルにマッチがある場合の対応
-            if complete_node_info.exists_package_plugin()
-                && complete_node_info.get_package_name() == package_name
-                && complete_node_info.get_plugin_name() == plugin_name
-            {
-                continue;
+            if complete_node_info.exists_package_plugin() {
+                if complete_node_info.get_package_name() == package_name
+                    && complete_node_info.get_plugin_name() == plugin_name
+                {
+                    continue;
+                } else {
+                    let to = &complete_node_info.get_remappings().values().next().unwrap();
+                    if to.contains(namespace.split('/').next().unwrap()) {
+                        continue;
+                    }
+                }
             }
 
             complete_node_info.set_package_name(&first_composable_node.package);
@@ -122,6 +135,33 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
     // Search launch.xml
     if !complete_node_info.exists_package_plugin() {
+        for entry in WalkDir::new(target_dir).into_iter().flatten() {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let file_path = entry.path().to_str().unwrap();
+
+            if file_path.ends_with(".launch.xml") {
+                let launch_file = fs::read_to_string(file_path).unwrap();
+                if let Some(composable_node) =
+                    launch_parser.parse_candidate_launch_xml(&launch_file)
+                {
+                    complete_node_info.set_package_name(&composable_node.package);
+                    complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
+                    if let Some(original_remappings) = composable_node.remappings {
+                        if let Some(fixed_remappings) =
+                            map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+                        {
+                            complete_node_info.set_remappings(fixed_remappings);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Search {node_name}.launch.xml
+    if !complete_node_info.exists_package_plugin() {
         let mut launch_xml = None;
         let mut key_str = node_name;
         while !key_str.is_empty() {
@@ -138,7 +178,19 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 break;
             }
             if launch_xmls.len() >= 2 && !key_str.is_empty() {
-                unreachable!();
+                // launch_xmlsのうち、</node>が含まれているものを選択
+                let mut node_contain_count = 0;
+                for launch_xml_ in launch_xmls {
+                    let content = read_to_string(launch_xml_).unwrap();
+                    if content.contains("</node>") {
+                        launch_xml = Some(content);
+                        node_contain_count += 1;
+                        if node_contain_count > 1 {
+                            unreachable!()
+                        }
+                    }
+                }
+                break;
             }
         }
 
@@ -146,14 +198,16 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             unreachable!();
         }
 
-        let composable_node = launch_parser.parse_launch_xml(&launch_xml.unwrap());
+        let composable_node = launch_parser.parse_confirmed_launch_xml(&launch_xml.unwrap());
 
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
         if let Some(original_remappings) = composable_node.remappings {
-            complete_node_info.set_remappings(
-                map_remappings(original_remappings.clone(), subs.clone(), pubs.clone()).unwrap(),
-            );
+            if let Some(fixed_remappings) =
+                map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+            {
+                complete_node_info.set_remappings(fixed_remappings);
+            }
         }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);

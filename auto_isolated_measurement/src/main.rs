@@ -1,4 +1,4 @@
-use auto_isolated_measurement::parse_node_info::parse_node_info;
+use auto_isolated_measurement::{parse_node_info::parse_node_info, utils::create_progress_bar};
 use clap::Parser;
 use dirs::home_dir;
 use std::fs::read_dir;
@@ -21,7 +21,12 @@ struct ArgParser {
 fn main() {
     let arg: ArgParser = ArgParser::parse();
 
-    for entry in read_dir(arg.dymanic_node_info_dir).unwrap() {
+    let dymanic_node_infos = read_dir(arg.dymanic_node_info_dir).unwrap();
+    let entries: Vec<_> = dymanic_node_infos.collect(); // エントリをベクタにコレクト
+    let pb = create_progress_bar(entries.len() as i32);
+
+    for entry in entries {
+        pb.inc(1);
         let path = entry.unwrap().path();
         parse_node_info(path.to_str().unwrap(), &arg.parsed_dir);
     }

@@ -38,7 +38,9 @@ impl PartialEq for LaunchParseResult {
 pub struct LaunchParser {
     launch_py_pattern: Regex,
     launch_py_remapping_pattern: Regex,
-    launch_xml_pattern: Regex,
+    launch_xml_pattern0: Regex,
+    launch_xml_pattern1: Regex,
+    launch_xml_composable_pattern: Regex,
     launch_xml_remapping_pattern: Regex,
 }
 
@@ -62,7 +64,18 @@ impl LaunchParser {
             .build()
             .unwrap(),
             launch_py_remapping_pattern: Regex::new(r#"\(([^,]*), ([^)]*)\)"#).unwrap(),
-            launch_xml_pattern: Regex::new(r#"<node pkg="([^"]+)" exec="([^"]+)" name=""#).unwrap(),
+            launch_xml_pattern0: Regex::new(r#"<node pkg="([^"]+)" exec="([^"]+)" name=""#)
+                .unwrap(),
+            launch_xml_pattern1: Regex::new(r#"<node name=".+?" exec="([^"]+)" pkg="([^"]+)""#)
+                .unwrap(),
+            launch_xml_composable_pattern: Regex::new(
+                &[
+                    r#"<composable_node pkg="([^"]+)" plugin="([^"]+)" name=""#,
+                    node_name,
+                ]
+                .join(""),
+            )
+            .unwrap(),
             launch_xml_remapping_pattern: Regex::new(r#"<remap from="([^"]+)" to="([^"]+)"/>"#)
                 .unwrap(),
         }
@@ -114,12 +127,32 @@ impl LaunchParser {
         }
     }
 
-    pub fn parse_launch_xml(&self, launch_xml: &str) -> LaunchParseResult {
-        if let Some(cap) = self.launch_xml_pattern.captures(launch_xml) {
+    pub fn parse_candidate_launch_xml(&self, launch_xml: &str) -> Option<LaunchParseResult> {
+        self.launch_xml_composable_pattern
+            .captures(launch_xml)
+            .map(|cap| {
+                LaunchParseResult::new(
+                    cap.get(1).unwrap().as_str(),
+                    Some(cap.get(2).unwrap().as_str()),
+                    None,
+                    self.parse_launch_xml_remappings(launch_xml),
+                )
+            })
+    }
+
+    pub fn parse_confirmed_launch_xml(&self, launch_xml: &str) -> LaunchParseResult {
+        if let Some(cap) = self.launch_xml_pattern0.captures(launch_xml) {
             LaunchParseResult::new(
                 cap.get(1).unwrap().as_str(),
                 None,
                 Some(cap.get(2).unwrap().as_str()),
+                self.parse_launch_xml_remappings(launch_xml),
+            )
+        } else if let Some(cap) = self.launch_xml_pattern1.captures(launch_xml) {
+            LaunchParseResult::new(
+                cap.get(2).unwrap().as_str(),
+                None,
+                Some(cap.get(1).unwrap().as_str()),
                 self.parse_launch_xml_remappings(launch_xml),
             )
         } else {

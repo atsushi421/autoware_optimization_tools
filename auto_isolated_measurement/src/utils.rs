@@ -82,6 +82,8 @@ pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<Str
                 || k == "/parameter_events"
                 || k == "/rosout"
                 || k.as_str().unwrap().contains("debug")
+                || k.as_str().unwrap().contains("/tf")
+                || k.as_str().unwrap().contains("/diagnostics")
             {
                 None
             } else {

@@ -68,6 +68,10 @@ impl CompleteNodeInfo {
         self.plugin_name.as_ref().unwrap()
     }
 
+    pub fn get_remappings(&self) -> &HashMap<String, String> {
+        self.remappings.as_ref().unwrap()
+    }
+
     pub fn set_executable(&mut self, executable: &str) {
         if self.executable.is_some() {
             unreachable!("executable is already set.");
