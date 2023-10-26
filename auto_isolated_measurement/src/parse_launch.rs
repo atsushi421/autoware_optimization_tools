@@ -49,6 +49,7 @@ impl LaunchParser {
                 &[
                     r#"ComposableNode\("#,
                     r#"\s*package=['"]([^'"]+)['"],"#,
+                    r#"(?:\s*namespace=.*?,)?"#,
                     r#"\s*plugin=([^,]+?),"#,
                     r#"\s*name=['"]"#,
                     node_name,

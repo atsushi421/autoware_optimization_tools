@@ -91,15 +91,11 @@ pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<Str
         .collect()
 }
 
-pub fn search_file(target_dir: &str, file_name: &str) -> String {
-    if let Some(file_path) = WalkDir::new(target_dir)
+pub fn search_files(target_dir: &str, file_name: &str) -> Vec<String> {
+    WalkDir::new(target_dir)
         .into_iter()
         .filter_map(Result::ok)
-        .find(|entry| entry.file_name().to_str() == Some(file_name))
+        .filter(|entry| entry.file_name().to_str() == Some(file_name))
         .map(|entry| entry.path().to_string_lossy().into_owned())
-    {
-        file_path
-    } else {
-        unreachable!();
-    }
+        .collect()
 }

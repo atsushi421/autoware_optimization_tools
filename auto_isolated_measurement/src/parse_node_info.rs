@@ -1,17 +1,14 @@
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::{
-    parse_driver_ros_wrapper_node, parse_map_projection_loader, parse_object_association_merger,
-    parse_topic_state_monitor,
-};
+use crate::edge_cases::parse_driver_ros_wrapper_node;
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::map_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
 use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
 use crate::utils::{
-    get_remapped_topics_from_mapping, read_yaml_as_mapping, search_file, NodeNameConverter,
+    get_remapped_topics_from_mapping, read_yaml_as_mapping, search_files, NodeNameConverter,
 };
 
 pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
@@ -31,35 +28,11 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let mut complete_node_info = CompleteNodeInfo::new(&namespace, &node_name);
 
     // Edge case
-    if node_name == "map_projection_loader" {
-        let (package_name, executable) = parse_map_projection_loader(target_dir);
-        complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
-
-        export_complete_node_info(&ros_node_name, &complete_node_info);
-        return;
-    } else if node_name.contains("topic_state_monitor") {
-        let (package_name, executable) = parse_topic_state_monitor(target_dir);
-        complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
-
-        export_complete_node_info(&ros_node_name, &complete_node_info);
-        return;
-    } else if node_name.contains("_driver_ros_wrapper_node") {
+    if node_name.contains("_driver_ros_wrapper_node") {
         let (package_name, plugin_name, executable) = parse_driver_ros_wrapper_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         complete_node_info.set_executable(&executable);
-
-        export_complete_node_info(&ros_node_name, &complete_node_info);
-        return;
-    } else if node_name.contains("object_association_merger") {
-        let (package_name, executable, remappings) = parse_object_association_merger(target_dir);
-        complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
-        complete_node_info.set_remappings(
-            map_remappings(remappings.clone(), subs.clone(), pubs.clone()).unwrap(),
-        );
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
@@ -121,14 +94,33 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         }
     }
 
+    // Search launch.xml
     if !complete_node_info.exists_package_plugin() {
-        // Search {node_name}.launch.xml
-        let launch_xml = read_to_string(search_file(
-            target_dir,
-            &format!("{}.launch.xml", node_name),
-        ))
-        .unwrap();
-        let composable_node = launch_parser.parse_launch_xml(&launch_xml);
+        let mut launch_xml = None;
+        let mut key_str = node_name;
+        while key_str != "" {
+            let launch_xmls = search_files(target_dir, &format!("{}.launch.xml", key_str));
+            if launch_xmls.is_empty() {
+                key_str = key_str.split('_').collect::<Vec<&str>>()
+                    [..key_str.split('_').count() - 1]
+                    .join("_");
+
+                continue;
+            }
+            if launch_xmls.len() == 1 {
+                launch_xml = Some(read_to_string(&launch_xmls[0]).unwrap());
+                break;
+            }
+            if launch_xmls.len() >= 2 {
+                unreachable!();
+            }
+        }
+
+        if launch_xml.is_none() {
+            unreachable!();
+        }
+
+        let composable_node = launch_parser.parse_launch_xml(&launch_xml.unwrap());
 
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
