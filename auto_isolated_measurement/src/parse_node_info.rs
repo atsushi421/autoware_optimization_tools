@@ -1,3 +1,4 @@
+use serde_yaml::Mapping;
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
@@ -7,9 +8,29 @@ use crate::map_remmappings::map_remappings;
 use crate::parse_executable::ExecutableParser;
 use crate::parse_launch::LaunchParser;
 use crate::parse_plugin::parse_plugin;
-use crate::utils::{
-    get_remapped_topics_from_mapping, read_yaml_as_mapping, search_files, NodeNameConverter,
-};
+use crate::utils::{read_yaml_as_mapping, search_files, NodeNameConverter};
+
+pub fn get_remapped_topics_from_mapping(mapping: &Mapping, key: &str) -> Vec<String> {
+    mapping[key]
+        .as_mapping()
+        .unwrap()
+        .iter()
+        .filter_map(|(k, _)| {
+            let k_str = k.as_str().unwrap().to_string();
+            if k == "/clock"
+                || k == "/parameter_events"
+                || k == "/rosout"
+                || k.as_str().unwrap().contains("debug")
+                || k.as_str().unwrap().contains("/tf")
+                || k.as_str().unwrap().contains("/diagnostics")
+            {
+                None
+            } else {
+                Some(k_str)
+            }
+        })
+        .collect()
+}
 
 pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     let ros_node_name = NodeNameConverter::to_ros_node_name(

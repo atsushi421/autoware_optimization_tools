@@ -1,6 +1,7 @@
-use auto_isolated_measurement::utils::{create_progress_bar, run_command, NodeNameConverter};
+use auto_isolated_measurement::utils::{create_progress_bar, NodeNameConverter};
 use std::fs::{self, File};
 use std::io::Write;
+use std::process::Command;
 
 const OUTPUT_DIR: &str = "dynamic_node_info";
 const SKIP_NODES: [&str; 12] = [
@@ -17,6 +18,15 @@ const SKIP_NODES: [&str; 12] = [
     "map_hash_generator",
     "/perception/traffic_light_recognition/traffic_light_arbiter/arbiter", // not executable
 ];
+
+pub fn run_command(command: &str) -> String {
+    let output = Command::new("sh")
+        .arg("-c")
+        .arg(command)
+        .output()
+        .expect("failed to execute command");
+    String::from_utf8(output.stdout).unwrap()
+}
 
 pub fn main() {
     let node_list_str = run_command("ros2 node list");
