@@ -2,7 +2,8 @@ use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
 use crate::edge_cases::{
-    parse_driver_ros_wrapper_node, parse_map_projection_loader, parse_topic_state_monitor,
+    parse_driver_ros_wrapper_node, parse_map_projection_loader, parse_object_association_merger,
+    parse_topic_state_monitor,
 };
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::map_remmappings::map_remappings;
@@ -49,6 +50,16 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         complete_node_info.set_executable(&executable);
+
+        export_complete_node_info(&ros_node_name, &complete_node_info);
+        return;
+    } else if node_name.contains("object_association_merger") {
+        let (package_name, executable, remappings) = parse_object_association_merger(target_dir);
+        complete_node_info.set_package_name(&package_name);
+        complete_node_info.set_executable(&executable);
+        complete_node_info.set_remappings(
+            map_remappings(remappings.clone(), subs.clone(), pubs.clone()).unwrap(),
+        );
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
@@ -101,12 +112,11 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                 &node_name,
             ));
 
-            if let Some(remappings) = map_remappings(
-                first_composable_node.remappings.clone(),
-                subs.clone(),
-                pubs.clone(),
-            ) {
-                complete_node_info.set_remappings(remappings);
+            if let Some(original_remappings) = &first_composable_node.remappings {
+                complete_node_info.set_remappings(
+                    map_remappings(original_remappings.clone(), subs.clone(), pubs.clone())
+                        .unwrap(),
+                );
             }
         }
     }
@@ -122,12 +132,10 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
-        if let Some(remappings) = map_remappings(
-            composable_node.remappings.clone(),
-            subs.clone(),
-            pubs.clone(),
-        ) {
-            complete_node_info.set_remappings(remappings);
+        if let Some(original_remappings) = composable_node.remappings {
+            complete_node_info.set_remappings(
+                map_remappings(original_remappings.clone(), subs.clone(), pubs.clone()).unwrap(),
+            );
         }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);

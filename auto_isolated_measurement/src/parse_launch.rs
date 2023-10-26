@@ -4,7 +4,7 @@ pub struct LaunchParseResult {
     pub package: String,
     pub plugin: Option<String>,
     pub executable: Option<String>,
-    pub remappings: Vec<(String, String)>,
+    pub remappings: Option<Vec<(String, String)>>,
 }
 
 impl LaunchParseResult {
@@ -12,7 +12,7 @@ impl LaunchParseResult {
         package: &str,
         plugin: Option<&str>,
         executable: Option<&str>,
-        remappings: Vec<(String, String)>,
+        remappings: Option<Vec<(String, String)>>,
     ) -> Self {
         Self {
             package: package.to_string(),
@@ -25,9 +25,13 @@ impl LaunchParseResult {
 
 impl PartialEq for LaunchParseResult {
     fn eq(&self, other: &Self) -> bool {
-        self.package == other.package
-            && self.plugin == other.plugin
-            && self.remappings.len() == other.remappings.len()
+        if self.remappings.is_some() && other.remappings.is_some() {
+            self.package == other.package
+                && self.plugin == other.plugin
+                && self.remappings.clone().unwrap().len() == other.remappings.clone().unwrap().len()
+        } else {
+            self.package == other.package && self.plugin == other.plugin
+        }
     }
 }
 
@@ -49,7 +53,7 @@ impl LaunchParser {
                     r#"\s*name=['"]"#,
                     node_name,
                     r#"['"],"#,
-                    r#"\s*remappings=\[(.*?)\],"#,
+                    r#"(?:\s*remappings=\[(.*?)\],)?"#,
                 ]
                 .join(""),
             )
@@ -77,18 +81,23 @@ impl LaunchParser {
     pub fn parse_launch_py(&self, launch_py: &str) -> Vec<LaunchParseResult> {
         let mut composable_nodes = Vec::new();
         for cap in self.launch_py_pattern.captures_iter(launch_py) {
+            let mut original_remappings = None;
+            if let Some(remappings) = cap.get(3) {
+                original_remappings = Some(self.parse_launch_py_remappings(remappings.as_str()));
+            }
+
             composable_nodes.push(LaunchParseResult::new(
                 cap.get(1).unwrap().as_str(),
                 Some(cap.get(2).unwrap().as_str()),
                 None,
-                self.parse_launch_py_remappings(cap.get(3).unwrap().as_str()),
+                original_remappings,
             ));
         }
 
         composable_nodes
     }
 
-    fn parse_launch_xml_remappings(&self, remappings: &str) -> Vec<(String, String)> {
+    fn parse_launch_xml_remappings(&self, remappings: &str) -> Option<Vec<(String, String)>> {
         let mut remappings_map = Vec::new();
         for cap in self.launch_xml_remapping_pattern.captures_iter(remappings) {
             remappings_map.push((
@@ -96,7 +105,12 @@ impl LaunchParser {
                 cap.get(2).unwrap().as_str().to_string(),
             ));
         }
-        remappings_map
+
+        if remappings_map.is_empty() {
+            None
+        } else {
+            Some(remappings_map)
+        }
     }
 
     pub fn parse_launch_xml(&self, launch_xml: &str) -> LaunchParseResult {

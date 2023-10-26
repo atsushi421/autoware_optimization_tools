@@ -21,6 +21,24 @@ pub fn parse_topic_state_monitor(target_dir: &str) -> (String, String) {
     (result.package, result.executable.unwrap())
 }
 
+pub fn parse_object_association_merger(
+    target_dir: &str,
+) -> (String, String, Vec<(String, String)>) {
+    let launch_file = read_to_string(search_file(
+        target_dir,
+        "object_association_merger.launch.xml",
+    ))
+    .unwrap();
+    let launch_parser = LaunchParser::new("dummy");
+    let result = launch_parser.parse_launch_xml(&launch_file);
+
+    (
+        result.package,
+        result.executable.unwrap(),
+        result.remappings.unwrap(),
+    )
+}
+
 pub fn parse_driver_ros_wrapper_node(_target_dir: &str) -> (String, String, String) {
     // HACK
     (
