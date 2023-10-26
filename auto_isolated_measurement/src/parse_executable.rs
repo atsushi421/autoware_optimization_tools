@@ -28,17 +28,21 @@ impl ExecutableParser {
         self.component_register_pattern
             .captures(cmake_file)
             .map(|cap| {
-                let executable = cap.get(1).unwrap().as_str();
-                if let Some(variable_cap) = self.variable_pattern.captures(executable) {
+                let executable_str = cap.get(1).unwrap().as_str();
+
+                if let Some(variable_cap) = self.variable_pattern.captures(executable_str) {
                     let variable_name = variable_cap.get(1).unwrap().as_str();
-                    let variable_map = if variable_name == "PROJECT_NAME" {
+                    let variable_content = if variable_name == "PROJECT_NAME" {
                         self.find_project_name(cmake_file)
                     } else {
                         self.find_variable_map(cmake_file, variable_name)
                     };
-                    executable.replace(&[r#"${"#, variable_name, r#"}"#].join(""), &variable_map)
+                    executable_str.replace(
+                        &[r#"${"#, variable_name, r#"}"#].join(""),
+                        &variable_content,
+                    )
                 } else {
-                    executable.to_string()
+                    executable_str.to_string()
                 }
             })
     }
@@ -46,20 +50,14 @@ impl ExecutableParser {
     fn find_project_name(&self, cmake_file: &str) -> String {
         let re = Regex::new(r#"project\((.+?)\)"#).unwrap();
         re.captures(cmake_file)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str()
-            .to_string()
+            .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
+            .unwrap_or_else(|| unreachable!("No project name found in: {}", cmake_file))
     }
 
     fn find_variable_map(&self, cmake_file: &str, variable_name: &str) -> String {
         let re = Regex::new(&[r#"set\("#, variable_name, r#" (.+?)\)"#].join("")).unwrap();
         re.captures(cmake_file)
-            .unwrap()
-            .get(1)
-            .unwrap()
-            .as_str()
-            .to_string()
+            .and_then(|cap| cap.get(1).map(|m| m.as_str().to_string()))
+            .unwrap_or_else(|| unreachable!("No variable map found in: {}", cmake_file))
     }
 }
