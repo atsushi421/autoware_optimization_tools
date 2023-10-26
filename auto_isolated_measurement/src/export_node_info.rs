@@ -93,6 +93,7 @@ pub fn export_complete_node_info(ros_node_name: &str, complete_node_info: &Compl
         NodeNameConverter::to_file_name(ros_node_name)
     ))
     .unwrap();
+
     let yaml_string = serde_yaml::to_string(&complete_node_info).unwrap();
     result
         .write_all(yaml_string.as_bytes())
