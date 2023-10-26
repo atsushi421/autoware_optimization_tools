@@ -117,7 +117,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         if file_path.ends_with(".launch.py") {
             let launch_file = fs::read_to_string(file_path).unwrap();
-            let composable_nodes = launch_parser.parse_launch_py(&launch_file);
+            let composable_nodes = launch_parser.parse_candidate_py(&launch_file);
             if composable_nodes.is_empty() {
                 continue;
             }
@@ -179,9 +179,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
             if file_path.ends_with(".launch.xml") {
                 let launch_file = fs::read_to_string(file_path).unwrap();
-                if let Some(composable_node) =
-                    launch_parser.parse_candidate_launch_xml(&launch_file)
-                {
+                if let Some(composable_node) = launch_parser.parse_candidate_xml(&launch_file) {
                     complete_node_info.set_package_name(&composable_node.package);
                     complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
                     if let Some(original_remappings) = composable_node.remappings {
@@ -234,7 +232,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             unreachable!();
         }
 
-        let composable_node = launch_parser.parse_confirmed_launch_xml(&launch_xml.unwrap());
+        let composable_node = launch_parser.parse_confirmed_xml(&launch_xml.unwrap());
 
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
