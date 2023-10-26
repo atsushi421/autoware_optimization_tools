@@ -2,7 +2,7 @@ use serde_yaml::Mapping;
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_gyro_odometer};
+use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_occupancy_grid_map_node};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::fix_remappings::fix_remappings;
 use crate::parse_executable::ExecutableParser;
@@ -58,19 +58,8 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
-    } else if node_name == "gyro_odometer" {
-        let (package_name, executable, mut remappings) = parse_gyro_odometer(target_dir);
-        complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
-        if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {
-            complete_node_info.set_remappings(fixed_remappings);
-        }
-
-        export_complete_node_info(&ros_node_name, &complete_node_info);
-        return;
     } else if node_name == "occupancy_grid_map_node" {
-        let (package_name, plugin_name, mut remappings) =
-            crate::edge_cases::parse_occupancy_grid_map_node(target_dir);
+        let (package_name, plugin_name, mut remappings) = parse_occupancy_grid_map_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {

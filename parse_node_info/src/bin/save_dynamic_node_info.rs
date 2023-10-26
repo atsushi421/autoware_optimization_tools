@@ -1,4 +1,4 @@
-use auto_isolated_measurement::utils::{create_progress_bar, NodeNameConverter};
+use parse_node_info::utils::{create_progress_bar, NodeNameConverter};
 use std::fs::{self, File};
 use std::io::Write;
 use std::process::Command;
