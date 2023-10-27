@@ -4,7 +4,7 @@ use std::io::Write;
 use std::process::Command;
 
 const OUTPUT_DIR: &str = "dynamic_node_info";
-const SKIP_NODES: [&str; 12] = [
+const SKIP_NODES: [&str; 13] = [
     "caret_",
     "launch_ros_",
     "rviz2",
@@ -17,6 +17,7 @@ const SKIP_NODES: [&str; 12] = [
     "robot_state_publisher",
     "map_hash_generator",
     "/perception/traffic_light_recognition/traffic_light_arbiter/arbiter", // not executable
+    "aggregator_node",
 ];
 
 pub fn run_command(command: &str) -> String {
