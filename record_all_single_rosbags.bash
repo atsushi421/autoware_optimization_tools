@@ -13,10 +13,12 @@ for file in "$complete_node_info_dir"/*; do
   (setsid ros2 launch autoware_launch logging_simulator.launch.xml map_path:="$HOME/autoware_map/sample-map-rosbag" vehicle_model:=sample_vehicle sensor_model:=sample_sensor_kit) &
   pid1=$!
 
+  sleep 110
+
   (setsid python3 "$HOME/autoware_optimization_tools/ros2_single_node_replayer/recorder.py" "$file") &
   pid2=$!
 
-  sleep 30
+  sleep 15
 
   ros2 bag play "$HOME/autoware_map/sample-rosbag/sample.db3" -r 0.2 -s sqlite3 &
 
@@ -24,7 +26,7 @@ for file in "$complete_node_info_dir"/*; do
 
   ros2 topic pub -1 /planning/mission_planning/goal geometry_msgs/PoseStamped '{header: {frame_id: "map"}, pose: {position: {x: 89516.8, y: 42442.2, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.840247 , w: 0.542204}}}' &
 
-  sleep 180
+  sleep 160
 
   kill -- -"$pid2"
 
