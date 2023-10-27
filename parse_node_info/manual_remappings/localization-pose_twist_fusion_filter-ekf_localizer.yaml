@@ -1,0 +1,12 @@
+remappings:
+  in_pose_with_covariance: /localization/pose_estimator/pose_with_covariance
+  in_twist_with_covariance: /localization/twist_estimator/twist_with_covariance
+  initialpose: /initialpose3d
+
+  ekf_odom: /localization/pose_twist_fusion_filter/kinematic_state
+  ekf_pose: /localization/pose_twist_fusion_filter/pose
+  ekf_pose_with_covariance: /localization/pose_with_covariance
+  ekf_biased_pose: /localization/pose_twist_fusion_filter/biased_pose
+  ekf_biased_pose_with_covariance: /localization/pose_twist_fusion_filter/biased_pose_with_covariance
+  ekf_twist: /localization/pose_twist_fusion_filter/twist
+  ekf_twist_with_covariance: /localization/pose_twist_fusion_filter/twist_with_covariance
