@@ -34,6 +34,14 @@ fn get_core_str(original_str: &str) -> String {
         .to_string();
     if core_str.contains("odom") {
         "kinematic_state".to_string()
+    } else if core_str.contains("object1") {
+        "clustering".to_string() // HACK: for object_association_meager1
+    } else if core_str.contains("reference_trajectory") {
+        "obstacle_avoidance_planner".to_string() // HACK: for planning_evaluator
+    } else if core_str.contains("velocity_limit_clear_command_from_internal") {
+        "clear_velocity_limit".to_string() // HACK: for external_velocity_limit_selector
+    } else if core_str.contains("ekf_trigger_node") {
+        "/initialpose3d".to_string() // HACK: for pose_initializer
     } else {
         core_str
     }
@@ -44,7 +52,16 @@ pub fn fix_remappings(
     subs: &mut Vec<String>,
     pubs: &mut Vec<String>,
 ) -> Option<HashMap<String, String>> {
-    original_remappings.retain(|(from, to)| !from.contains("debug") || !to.contains("debug"));
+    original_remappings.retain(|(from, to)| {
+        !(from.contains("debug")
+            || to.contains("debug")
+            || from.contains("service")
+            || to.contains("service")
+            || from.contains("client")
+            || to.contains("client")
+            || from.contains("srv")
+            || to.contains("srv"))
+    });
 
     if original_remappings.is_empty() {
         return None;
@@ -55,9 +72,11 @@ pub fn fix_remappings(
     // First, the topics for which the remapping string is directly specified are mapped.
     original_remappings.retain(|(from, to)| {
         if to.starts_with('\"') {
-            fixed_remappings.insert(from.replace('\"', ""), to.replace('\"', ""));
-            subs.retain(|sub_| sub_ != to);
-            pubs.retain(|pub_| pub_ != to);
+            let from_fixed = from.trim_matches('\"');
+            let to_fixed = to.trim_matches('\"');
+            fixed_remappings.insert(from_fixed.to_string(), to_fixed.to_string());
+            subs.retain(|sub_| sub_ != to_fixed);
+            pubs.retain(|pub_| pub_ != to_fixed);
             false
         } else {
             true
