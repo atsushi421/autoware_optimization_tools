@@ -10,7 +10,7 @@ fi
 WAITING_TIME_FOR_AUTOWARE_TO_LAUNCH=120
 WAITING_TIME_FOR_RECORDER_TO_START=15
 WAITING_TIME_FOR_LOCALIZATION=20
-WAITING_TIME_FOR_SIMULATION_TO_END=160
+WAITING_TIME_FOR_SIMULATION_TO_END=150
 GOAL_POSITION_MSG='{header: {frame_id: "map"}, pose: {position: {x: 89516.8, y: 42442.2, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.840247 , w: 0.542204}}}'
 
 for complete_node_info in "$COMPLETE_NODE_INFO_DIR"/*; do
@@ -32,6 +32,6 @@ for complete_node_info in "$COMPLETE_NODE_INFO_DIR"/*; do
 
     sleep "$WAITING_TIME_FOR_SIMULATION_TO_END"
 
-    kill -- -"$recorder_pid"
+    kill -SIGINT -- -"$recorder_pid"
     kill -- -"$autoware_pid"
 done
