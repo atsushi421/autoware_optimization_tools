@@ -39,14 +39,14 @@ for node_replay_dir in "$REPLAYER_OUTPUT_DIR"/*; do
 
     # Start CARET
     caret_session_name="${node_replay_dir##*/}"
-    (setsid ros2 caret record --immediate -s "$caret_session_name") &
+    (setsid ros2 caret record --immediate -s "$caret_session_name" --record-clock) &
     caret_pid=$!
 
     sleep "$WAITING_TIME_FOR_CARET_TO_START"
 
     # Play rosbag
     rosbag_dir=$(find "$node_replay_dir" -type d -name "rosbag*")
-    ros2 bag play "$rosbag_dir" &
+    ros2 bag play "$rosbag_dir" --clock &
 
     # (optional) Store topic
     if [ -n "$STORED_TOPIC_NAME" ]; then
