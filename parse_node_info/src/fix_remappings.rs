@@ -50,6 +50,7 @@ fn get_core_str(original_str: &str) -> String {
 pub fn fix_remappings(
     original_remappings: &mut Vec<(String, String)>,
     namespace: &str,
+    node_name: &str,
     subs: &mut Vec<String>,
     pubs: &mut Vec<String>,
 ) -> Option<HashMap<String, String>> {
@@ -68,18 +69,19 @@ pub fn fix_remappings(
         return None;
     }
 
-    // Assign the omitted namespace
+    // Assign the omitted namespace and nodename
     let mut converted_remappings = Vec::new();
+    let omitted_str = format!("{}/{}", namespace, node_name);
     original_remappings.retain(|(from, to)| {
         let from_fixed = if from.starts_with("\"~") {
-            Some(from.replace('~', namespace))
+            Some(from.replace('~', &omitted_str))
         } else {
             None
         };
         let to_fixed = if to.starts_with("\"~") {
-            Some(to.replace('~', namespace))
+            Some(to.replace('~', &omitted_str))
         } else if to.starts_with('\"') && !to.starts_with("\"/") {
-            Some(format!("\"{}/{}", namespace, to.trim_start_matches('"')))
+            Some(format!("\"{}/{}", namespace, to.trim_start_matches('"'))) // Only namespace is assigned to this description method.
         } else {
             None
         };
