@@ -68,19 +68,27 @@ pub fn fix_remappings(
         return None;
     }
 
-    // Convert ~ to namespace
+    // Assign the omitted namespace
     let mut converted_remappings = Vec::new();
     original_remappings.retain(|(from, to)| {
-        if from.starts_with("\"~") {
-            let from_fixed = from.replace('~', namespace);
-            let to_fixed = if to.starts_with("\"/") || !to.starts_with('\"') {
-                to.to_string()
-            } else if to.starts_with("\"~") {
-                to.replace('~', namespace)
-            } else {
-                format!("\"{}/{}", namespace, to.trim_start_matches('"'))
-            };
-            converted_remappings.push((from_fixed, to_fixed));
+        let from_fixed = if from.starts_with("\"~") {
+            Some(from.replace('~', namespace))
+        } else {
+            None
+        };
+        let to_fixed = if to.starts_with("\"~") {
+            Some(to.replace('~', namespace))
+        } else if to.starts_with('\"') && !to.starts_with("\"/") {
+            Some(format!("\"{}/{}", namespace, to.trim_start_matches('"')))
+        } else {
+            None
+        };
+
+        if from_fixed.is_some() || to_fixed.is_some() {
+            converted_remappings.push((
+                from_fixed.unwrap_or(from.to_string()),
+                to_fixed.unwrap_or(to.to_string()),
+            ));
             false
         } else {
             true
