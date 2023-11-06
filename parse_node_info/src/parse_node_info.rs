@@ -62,7 +62,9 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         let (package_name, plugin_name, mut remappings) = parse_occupancy_grid_map_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
-        if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {
+        if let Some(fixed_remappings) =
+            fix_remappings(&mut remappings, &namespace, &mut subs, &mut pubs)
+        {
             complete_node_info.set_remappings(fixed_remappings);
         }
 
@@ -142,7 +144,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             if let Some(original_remappings) = &first_composable_node.remappings {
                 let mut remappings_clone = original_remappings.clone();
                 if let Some(fixed_remappings) =
-                    fix_remappings(&mut remappings_clone, &mut subs, &mut pubs)
+                    fix_remappings(&mut remappings_clone, &namespace, &mut subs, &mut pubs)
                 {
                     complete_node_info.set_remappings(fixed_remappings);
                 }
@@ -164,9 +166,12 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                     complete_node_info.set_package_name(&composable_node.package);
                     complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
                     if let Some(mut original_remappings) = composable_node.remappings {
-                        if let Some(fixed_remappings) =
-                            fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
-                        {
+                        if let Some(fixed_remappings) = fix_remappings(
+                            &mut original_remappings,
+                            &namespace,
+                            &mut subs,
+                            &mut pubs,
+                        ) {
                             complete_node_info.set_remappings(fixed_remappings);
                         }
                     }
@@ -223,7 +228,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         complete_node_info.set_executable(&composable_node.executable.unwrap());
         if let Some(mut original_remappings) = composable_node.remappings {
             if let Some(fixed_remappings) =
-                fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
+                fix_remappings(&mut original_remappings, &namespace, &mut subs, &mut pubs)
             {
                 complete_node_info.set_remappings(fixed_remappings);
             }

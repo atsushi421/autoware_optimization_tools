@@ -49,6 +49,7 @@ fn get_core_str(original_str: &str) -> String {
 
 pub fn fix_remappings(
     original_remappings: &mut Vec<(String, String)>,
+    namespace: &str,
     subs: &mut Vec<String>,
     pubs: &mut Vec<String>,
 ) -> Option<HashMap<String, String>> {
@@ -66,6 +67,26 @@ pub fn fix_remappings(
     if original_remappings.is_empty() {
         return None;
     }
+
+    // Convert ~ to namespace
+    let mut converted_remappings = Vec::new();
+    original_remappings.retain(|(from, to)| {
+        if from.starts_with("\"~") {
+            let from_fixed = from.replace('~', namespace);
+            let to_fixed = if to.starts_with("\"/") || !to.starts_with('\"') {
+                to.to_string()
+            } else if to.starts_with("\"~") {
+                to.replace('~', namespace)
+            } else {
+                format!("\"{}/{}", namespace, to.trim_start_matches('"'))
+            };
+            converted_remappings.push((from_fixed, to_fixed));
+            false
+        } else {
+            true
+        }
+    });
+    original_remappings.extend(converted_remappings);
 
     let mut fixed_remappings = HashMap::new();
 
