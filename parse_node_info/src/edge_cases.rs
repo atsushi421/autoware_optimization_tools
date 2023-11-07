@@ -26,11 +26,17 @@ pub fn parse_aggregator_node(target_dir: &str) -> (String, String) {
     (result.package, result.executable.unwrap())
 }
 
-pub fn parse_driver_ros_wrapper_node(_target_dir: &str) -> (String, String, String) {
+pub fn parse_driver_ros_wrapper_node(
+    _target_dir: &str,
+) -> (String, String, String, Vec<(String, String)>) {
     // HACK: hard coded
     (
         "nebula_ros".to_string(),
         "VelodyneDriverRosWrapper".to_string(),
         "velodyne_driver_ros_wrapper_node".to_string(),
+        vec![
+            ("aw_points".to_string(), "pointcloud_raw".to_string()),
+            ("aw_points_ex".to_string(), "pointcloud_raw_ex".to_string()),
+        ],
     )
 }

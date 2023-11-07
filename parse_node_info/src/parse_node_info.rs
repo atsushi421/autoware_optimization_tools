@@ -51,10 +51,20 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     // TODO: refactor
     // Edge case
     if node_name.contains("_driver_ros_wrapper_node") {
-        let (package_name, plugin_name, executable) = parse_driver_ros_wrapper_node(target_dir);
+        let (package_name, plugin_name, executable, mut remappings) =
+            parse_driver_ros_wrapper_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         complete_node_info.set_executable(&executable);
+        if let Some(fixed_remappings) = fix_remappings(
+            &mut remappings,
+            &namespace,
+            &node_name,
+            &mut subs,
+            &mut pubs,
+        ) {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
