@@ -1,0 +1,8 @@
+remappings:
+  ekf_odom: /localization/kinematic_state
+  ekf_pose_with_covariance: /localization/pose_twist_fusion_filter/biased_pose_with_covariance
+  points_raw: /localization/util/downsample/pointcloud
+  regularization_pose_with_covariance: /sensing/gnss/pose_with_covariance
+
+  ndt_pose: /localization/pose_estimator/pose
+  ndt_pose_with_covariance: /localization/pose_estimator/pose_with_covariance

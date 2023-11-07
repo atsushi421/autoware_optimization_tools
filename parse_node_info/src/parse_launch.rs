@@ -77,7 +77,7 @@ impl LaunchParser {
                 .join(""),
             )
             .unwrap(),
-            xml_remapping_pattern: Regex::new(r#"<remap from="([^"]+)" to="([^"]+)"/>"#).unwrap(),
+            xml_remapping_pattern: Regex::new(r#"<remap from=("[^"]+") to=("[^"]+")/>"#).unwrap(),
         }
     }
 
@@ -113,10 +113,11 @@ impl LaunchParser {
     fn parse_xml_remappings(&self, remappings_str: &str) -> Option<Vec<(String, String)>> {
         let mut remappings = Vec::new();
         for cap in self.xml_remapping_pattern.captures_iter(remappings_str) {
-            remappings.push((
-                cap.get(1).unwrap().as_str().to_string(),
-                cap.get(2).unwrap().as_str().to_string(),
-            ));
+            let mut to_str = cap.get(2).unwrap().as_str();
+            if to_str.starts_with("\"$") {
+                to_str = to_str.trim_matches('\"'); // This is to align with launch.py.
+            }
+            remappings.push((cap.get(1).unwrap().as_str().to_string(), to_str.to_string()));
         }
 
         if remappings.is_empty() {

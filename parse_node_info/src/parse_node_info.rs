@@ -2,7 +2,9 @@ use serde_yaml::Mapping;
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_occupancy_grid_map_node};
+use crate::edge_cases::{
+    parse_driver_ros_wrapper_node, parse_euclidean_cluster, parse_occupancy_grid_map_node,
+};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::fix_remappings::fix_remappings;
 use crate::parse_executable::ExecutableParser;
@@ -51,10 +53,20 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     // TODO: refactor
     // Edge case
     if node_name.contains("_driver_ros_wrapper_node") {
-        let (package_name, plugin_name, executable) = parse_driver_ros_wrapper_node(target_dir);
+        let (package_name, plugin_name, executable, mut remappings) =
+            parse_driver_ros_wrapper_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
         complete_node_info.set_executable(&executable);
+        if let Some(fixed_remappings) = fix_remappings(
+            &mut remappings,
+            &namespace,
+            &node_name,
+            &mut subs,
+            &mut pubs,
+        ) {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
@@ -62,7 +74,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         let (package_name, plugin_name, mut remappings) = parse_occupancy_grid_map_node(target_dir);
         complete_node_info.set_package_name(&package_name);
         complete_node_info.set_plugin_name(&plugin_name);
-        if let Some(fixed_remappings) = fix_remappings(&mut remappings, &mut subs, &mut pubs) {
+        if let Some(fixed_remappings) = fix_remappings(
+            &mut remappings,
+            &namespace,
+            &node_name,
+            &mut subs,
+            &mut pubs,
+        ) {
             complete_node_info.set_remappings(fixed_remappings);
         }
 
@@ -83,10 +101,34 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
-    } else if node_name == "aggregator_node" {
-        let (package_name, executable) = crate::edge_cases::parse_aggregator_node(target_dir);
+    } else if node_name == "euclidean_cluster" {
+        let (package_name, plugin_name, mut remappings) = parse_euclidean_cluster(target_dir);
         complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
+        complete_node_info.set_plugin_name(&plugin_name);
+        if let Some(fixed_remappings) = fix_remappings(
+            &mut remappings,
+            &namespace,
+            &node_name,
+            &mut subs,
+            &mut pubs,
+        ) {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
+
+        let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
+        for entry in WalkDir::new(target_dir).into_iter().flatten() {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let file_path = entry.path().to_str().unwrap();
+            if file_path.ends_with("CMakeLists.txt") {
+                let cmake_file = fs::read_to_string(file_path).unwrap();
+                if let Some(executable) = executable_parser.find_executable(&cmake_file) {
+                    complete_node_info.set_executable(&executable);
+                    break;
+                }
+            }
+        }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
@@ -141,9 +183,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
             complete_node_info.set_plugin_name(plugin_name);
             if let Some(original_remappings) = &first_composable_node.remappings {
                 let mut remappings_clone = original_remappings.clone();
-                if let Some(fixed_remappings) =
-                    fix_remappings(&mut remappings_clone, &mut subs, &mut pubs)
-                {
+                if let Some(fixed_remappings) = fix_remappings(
+                    &mut remappings_clone,
+                    &namespace,
+                    &node_name,
+                    &mut subs,
+                    &mut pubs,
+                ) {
                     complete_node_info.set_remappings(fixed_remappings);
                 }
             }
@@ -164,9 +210,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
                     complete_node_info.set_package_name(&composable_node.package);
                     complete_node_info.set_plugin_name(&composable_node.plugin.unwrap());
                     if let Some(mut original_remappings) = composable_node.remappings {
-                        if let Some(fixed_remappings) =
-                            fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
-                        {
+                        if let Some(fixed_remappings) = fix_remappings(
+                            &mut original_remappings,
+                            &namespace,
+                            &node_name,
+                            &mut subs,
+                            &mut pubs,
+                        ) {
                             complete_node_info.set_remappings(fixed_remappings);
                         }
                     }
@@ -178,7 +228,7 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
     if !complete_node_info.exists_package_plugin() {
         // Search {key_str}.launch.xml
         let mut launch_xml = None;
-        let mut key_str = node_name;
+        let mut key_str = node_name.clone();
         while !key_str.is_empty() {
             let candidate_launch_xmls =
                 search_files(target_dir, &format!("{}.launch.xml", key_str));
@@ -222,9 +272,13 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
         complete_node_info.set_package_name(&composable_node.package);
         complete_node_info.set_executable(&composable_node.executable.unwrap());
         if let Some(mut original_remappings) = composable_node.remappings {
-            if let Some(fixed_remappings) =
-                fix_remappings(&mut original_remappings, &mut subs, &mut pubs)
-            {
+            if let Some(fixed_remappings) = fix_remappings(
+                &mut original_remappings,
+                &namespace,
+                &node_name,
+                &mut subs,
+                &mut pubs,
+            ) {
                 complete_node_info.set_remappings(fixed_remappings);
             }
         }

@@ -49,6 +49,8 @@ fn get_core_str(original_str: &str) -> String {
 
 pub fn fix_remappings(
     original_remappings: &mut Vec<(String, String)>,
+    namespace: &str,
+    node_name: &str,
     subs: &mut Vec<String>,
     pubs: &mut Vec<String>,
 ) -> Option<HashMap<String, String>> {
@@ -66,6 +68,35 @@ pub fn fix_remappings(
     if original_remappings.is_empty() {
         return None;
     }
+
+    // Assign the omitted namespace and nodename
+    let mut converted_remappings = Vec::new();
+    let omitted_str = format!("{}/{}", namespace, node_name);
+    original_remappings.retain(|(from, to)| {
+        let from_fixed = if from.starts_with("\"~") {
+            Some(from.replace('~', &omitted_str))
+        } else {
+            None
+        };
+        let to_fixed = if to.starts_with("\"~") {
+            Some(to.replace('~', &omitted_str))
+        } else if to.starts_with('\"') && !to.starts_with("\"/") {
+            Some(format!("\"{}/{}", namespace, to.trim_start_matches('"'))) // Only namespace is assigned to this description method.
+        } else {
+            None
+        };
+
+        if from_fixed.is_some() || to_fixed.is_some() {
+            converted_remappings.push((
+                from_fixed.unwrap_or(from.to_string()),
+                to_fixed.unwrap_or(to.to_string()),
+            ));
+            false
+        } else {
+            true
+        }
+    });
+    original_remappings.extend(converted_remappings);
 
     let mut fixed_remappings = HashMap::new();
 
