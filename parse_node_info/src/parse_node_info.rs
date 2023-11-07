@@ -2,7 +2,9 @@ use serde_yaml::Mapping;
 use std::fs::{self, read_to_string};
 use walkdir::WalkDir;
 
-use crate::edge_cases::{parse_driver_ros_wrapper_node, parse_occupancy_grid_map_node};
+use crate::edge_cases::{
+    parse_driver_ros_wrapper_node, parse_euclidean_cluster, parse_occupancy_grid_map_node,
+};
 use crate::export_node_info::{export_complete_node_info, CompleteNodeInfo};
 use crate::fix_remappings::fix_remappings;
 use crate::parse_executable::ExecutableParser;
@@ -99,10 +101,34 @@ pub fn parse_node_info(dynamic_node_info_path: &str, target_dir: &str) {
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
-    } else if node_name == "aggregator_node" {
-        let (package_name, executable) = crate::edge_cases::parse_aggregator_node(target_dir);
+    } else if node_name == "euclidean_cluster" {
+        let (package_name, plugin_name, mut remappings) = parse_euclidean_cluster(target_dir);
         complete_node_info.set_package_name(&package_name);
-        complete_node_info.set_executable(&executable);
+        complete_node_info.set_plugin_name(&plugin_name);
+        if let Some(fixed_remappings) = fix_remappings(
+            &mut remappings,
+            &namespace,
+            &node_name,
+            &mut subs,
+            &mut pubs,
+        ) {
+            complete_node_info.set_remappings(fixed_remappings);
+        }
+
+        let executable_parser = ExecutableParser::new(complete_node_info.get_plugin_name());
+        for entry in WalkDir::new(target_dir).into_iter().flatten() {
+            if entry.file_type().is_dir() {
+                continue;
+            }
+            let file_path = entry.path().to_str().unwrap();
+            if file_path.ends_with("CMakeLists.txt") {
+                let cmake_file = fs::read_to_string(file_path).unwrap();
+                if let Some(executable) = executable_parser.find_executable(&cmake_file) {
+                    complete_node_info.set_executable(&executable);
+                    break;
+                }
+            }
+        }
 
         export_complete_node_info(&ros_node_name, &complete_node_info);
         return;
