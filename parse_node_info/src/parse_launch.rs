@@ -25,13 +25,15 @@ impl LaunchParseResult {
 
 impl PartialEq for LaunchParseResult {
     fn eq(&self, other: &Self) -> bool {
-        if self.remappings.is_some() && other.remappings.is_some() {
-            self.package == other.package
-                && self.plugin == other.plugin
-                && self.remappings.as_ref().unwrap().len()
-                    == other.remappings.as_ref().unwrap().len()
-        } else {
-            self.package == other.package && self.plugin == other.plugin
+        match (&self.remappings, &other.remappings) {
+            (Some(self_remappings), Some(other_remappings)) => {
+                self.package == other.package
+                    && self.plugin == other.plugin
+                    && self_remappings.len() == other_remappings.len()
+            }
+            (Some(_), None) => false,
+            (None, Some(_)) => false,
+            _ => self.package == other.package && self.plugin == other.plugin,
         }
     }
 }
@@ -57,6 +59,7 @@ impl LaunchParser {
                     r#"\s*name=['"]"#,
                     node_name,
                     r#"['"],"#,
+                    r#"(?:\s*namespace=.*?,)?"#,
                     r#"(?:\s*remappings=\[(.*?)\],)?"#,
                 ]
                 .join(""),
