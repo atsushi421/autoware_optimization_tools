@@ -39,7 +39,8 @@ for node_replay_dir in "$REPLAYER_OUTPUT_DIR"/*; do
     done
 
     # Start CARET
-    caret_session_name="${node_replay_dir##*/}"
+    current_time=$(date +"%Y%m%d-%H%M%S")
+    caret_session_name="${current_time}_from_${node_replay_dir##*/}"
     (setsid ros2 caret record --immediate -s "$caret_session_name" --record-clock) &
     caret_pid=$!
 
