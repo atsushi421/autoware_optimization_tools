@@ -17,7 +17,12 @@ WAITING_TIME_FOR_SIMULATION_TO_END=60
 GOAL_POSITION_MSG='{header: {frame_id: "map"}, pose: {position: {x: 89516.8, y: 42442.2, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.840247 , w: 0.542204}}}'
 
 for complete_node_info in "$COMPLETE_NODE_INFO_DIR"/*; do
-    if [[ "$complete_node_info" == *"planning-"* ]] || [[ "$complete_node_info" == *"control-"* ]] || [[ "$complete_node_info" == *"system-"* ]] || [[ "$complete_node_info" == *"map-"* ]] || [[ "$complete_node_info" == *"traffic_light"* ]]; then
+    basename_complete_node_info=$(basename "$complete_node_info")
+    if [[ "$basename_complete_node_info" == "planning-"* ]] ||
+    [[ "$basename_complete_node_info" == "control-"* ]] ||
+    [[ "$basename_complete_node_info" == "system-"* ]] ||
+    [[ "$basename_complete_node_info" == "map-"* ]] ||
+    [[ "$basename_complete_node_info" == "traffic_light"* ]]; then
         continue
     fi
 
