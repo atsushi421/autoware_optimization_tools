@@ -164,3 +164,5 @@ output/
 dynamic_node_info/
 complete_node_info/
 caret_trace_data/
+comparison/
+latency_cache/

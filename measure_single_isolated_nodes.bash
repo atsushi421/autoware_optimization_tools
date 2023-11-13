@@ -2,7 +2,8 @@
 
 REPLAYER_OUTPUT_DIR=${1:-"$HOME/autoware_optimization_tools/ros2_single_node_replayer/output"}
 ISOTED_CPU=${2:-"2"}
-STORED_TOPIC_NAME="$3"  # optional
+OUTPUT_DIR=${3:-"$HOME/autoware_optimization_tools/caret_trace_data"}
+STORED_TOPIC_NAME="$4"  # optional
 
 # Setting for CARET
 ulimit -n 65535
@@ -11,9 +12,9 @@ source /opt/ros/humble/setup.bash
 source ~/ros2_caret_ws/install/local_setup.bash
 export LD_PRELOAD=$(readlink -f ~/ros2_caret_ws/install/caret_trace/lib/libcaret.so)
 source "$HOME/autoware/install/local_setup.bash"
-source "$HOME/autoware/caret_topic_filter.bash"
-mkdir -p "$HOME/autoware_optimization_tools/caret_trace_data"
-export ROS_TRACE_DIR="$HOME/autoware_optimization_tools/caret_trace_data"
+source ./caret_topic_filter.bash
+mkdir -p "$OUTPUT_DIR"
+export ROS_TRACE_DIR="$OUTPUT_DIR"
 
 WAITING_TIME_FOR_NODE_TO_START=1
 WAITING_TIME_FOR_CARET_TO_START=3
@@ -39,15 +40,16 @@ for node_replay_dir in "$REPLAYER_OUTPUT_DIR"/*; do
     done
 
     # Start CARET
-    caret_session_name="${node_replay_dir##*/}"
-    (setsid ros2 caret record --immediate -s "$caret_session_name" --record-clock) &
+    current_time=$(date +"%Y%m%d-%H%M%S")
+    caret_session_name="${current_time}_from_${node_replay_dir##*/}"
+    (setsid ros2 caret record --immediate -s "$caret_session_name") &
     caret_pid=$!
 
     sleep "$WAITING_TIME_FOR_CARET_TO_START"
 
     # Play rosbag
     rosbag_dir=$(find "$node_replay_dir" -type d -name "rosbag*")
-    ros2 bag play "$rosbag_dir" --clock &
+    ros2 bag play "$rosbag_dir" &
 
     # (optional) Store topic
     if [ -n "$STORED_TOPIC_NAME" ]; then
